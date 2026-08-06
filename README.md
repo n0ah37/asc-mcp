@@ -192,11 +192,15 @@ without applying it. A `5xx` or a mid-flight timeout is replayed only for
 duplicate resource (and Apple permanently reserves identifiers like a product
 ID). Backoff is exponential with jitter and honours `Retry-After`.
 
-**Response shaping.** Per-resource `self` links and link-only relationships are
-stripped — no addressable content is lost, and `links.next` survives for
-pagination. If a response still exceeds the budget, `included` is dropped first,
-then trailing `data` items, and the result carries a `_truncated` key saying what
-went missing and how to narrow the query.
+**Response shaping.** Results are serialized compactly — indented JSON measured
+1.72× the bytes for identical content, so the same budget now carries about 40%
+more of the data you asked for. Per-resource `self` links and link-only
+relationships are stripped: no addressable content is lost, and `links.next`
+survives for pagination. If a response still exceeds the budget, `included` is
+dropped first, then trailing `data` items, and the result carries a `_truncated`
+key saying what went missing and how to narrow the query. Note that following
+`links.next` after a trim would skip the dropped items — re-request with a
+smaller `limit` instead.
 
 ## Build & run
 

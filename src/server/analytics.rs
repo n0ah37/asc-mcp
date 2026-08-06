@@ -16,6 +16,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::{push_opt, AppStoreServer};
+use crate::error::AscError;
 use crate::report;
 
 /// The access type for an analytics report request.
@@ -230,10 +231,18 @@ numbers — the other analytics tools only navigate to the segment."
             .download_unauthenticated(&args.url)
             .await
             .map_err(AppStoreServer::map_err)?;
+        let max_rows = args.max_rows.unwrap_or(report::DEFAULT_MAX_ROWS);
 
-        let decoded = report::decompress(&bytes).map_err(AppStoreServer::map_err)?;
-        let text = String::from_utf8_lossy(&decoded);
-        let parsed = report::parse(&text, args.max_rows.unwrap_or(report::DEFAULT_MAX_ROWS))
+        // Gunzipping and parsing a report is synchronous CPU work — tens of
+        // milliseconds for a few hundred thousand rows, and linear beyond that.
+        // Running it inline would stall an async worker for that whole time.
+        let parsed = tokio::task::spawn_blocking(move || report::parse_segment(&bytes, max_rows))
+            .await
+            .map_err(|e| {
+                AppStoreServer::map_err(AscError::Parse(format!(
+                    "the report parsing task did not finish: {e}"
+                )))
+            })?
             .map_err(AppStoreServer::map_err)?;
 
         self.ok_json(parsed.to_json())

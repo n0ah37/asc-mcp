@@ -37,6 +37,9 @@ thiserror = "2"
 anyhow = "1"
 md-5 = "0.10"
 hex = "0.4"
+# Reference-counted buffers: upload chunks and downloaded report segments are
+# handed between retry attempts and threads without copying the payload.
+bytes = "1"
 # Pure-Rust backend: the release workflow cross-compiles, and a C dependency
 # would need a working cross-toolchain on every target.
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }

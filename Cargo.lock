@@ -37,6 +37,7 @@ name = "appstore-mcp"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "csv",
  "flate2",
  "hex",

@@ -18,6 +18,7 @@
 //! failed chunk is retried on its own, so one flaky `PUT` doesn't discard an
 //! upload that is otherwise complete.
 
+use bytes::Bytes;
 use md5::{Digest, Md5};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Method;
@@ -133,7 +134,10 @@ impl AscClient {
         let method = Method::from_bytes(op["method"].as_str().unwrap_or("PUT").as_bytes())
             .unwrap_or(Method::PUT);
         let headers = operation_headers(op)?;
-        let chunk = read_range(file_path, range.0, range.1).await?;
+        // `Bytes` rather than `Vec<u8>`: the retry closure has to hand the body
+        // over on every attempt, and cloning a `Vec` would copy the whole chunk
+        // even on the first, successful try.
+        let chunk = Bytes::from(read_range(file_path, range.0, range.1).await?);
 
         // A pre-signed PUT of a fixed byte range is idempotent, so a flaky chunk
         // can be replayed without corrupting the assembled file.

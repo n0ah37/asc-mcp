@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
+use bytes::Bytes;
 use reqwest::{header::RETRY_AFTER, Client, Method, RequestBuilder, Response};
 use serde_json::{json, Value};
 
@@ -157,7 +158,10 @@ impl AscClient {
     /// Analytics report segments live at pre-signed URLs that reject requests
     /// carrying an unexpected `Authorization` header. Uses the bulk-transfer
     /// timeout, since report files are far larger than an API response.
-    pub async fn download_unauthenticated(&self, url: &str) -> Result<Vec<u8>, AscError> {
+    ///
+    /// Returns [`Bytes`] rather than `Vec<u8>` so the body is handed on without
+    /// being copied — these are whole report files, not API responses.
+    pub async fn download_unauthenticated(&self, url: &str) -> Result<Bytes, AscError> {
         if !url.starts_with("https://") && !url.starts_with("http://") {
             return Err(AscError::InvalidRequest(format!(
                 "expected an absolute http(s) URL to download, got '{url}'"
@@ -178,7 +182,7 @@ impl AscClient {
                 raw: Some(String::from_utf8_lossy(&bytes).into_owned()),
             });
         }
-        Ok(bytes.to_vec())
+        Ok(bytes)
     }
 
     /// Apply the bulk-transfer timeout to a request that moves a whole file.

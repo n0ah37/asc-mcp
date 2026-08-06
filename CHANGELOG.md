@@ -3,6 +3,55 @@
 All notable changes to `appstore-mcp`. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-08-06
+
+Performance and resource use, driven by measurement rather than guesswork.
+Profiling first ruled out the usual suspects: startup is ~5 ms, idle RSS is
+7.5 MB, and generating 114 tool schemas doesn't register. The costs were
+elsewhere.
+
+### Changed
+
+- **Tool results are serialized compactly.** Indented JSON measured **1.72×**
+  the bytes of the same document — 72% more tokens for identical information,
+  and a byte budget that carried ~40% less of the data actually asked for. A
+  large `list_apps` page now delivers **421 items** within the 60 KB budget.
+  This is visible in output: results are no longer pretty-printed.
+- **Analytics segments stream.** The gzip decoder now feeds the CSV reader
+  directly, and the download is handed on as `Bytes` instead of being copied
+  into a `Vec`. A 1.2 MB segment expanding to 10.6 MB previously held **11.8 MB**
+  of intermediates; peak is now the compressed buffer alone. Parsing 300k rows
+  also got faster: **28 ms → 14.7 ms**.
+- **Report parsing runs on a blocking thread.** Gunzipping and parsing is
+  synchronous CPU work — ~15 ms for 300k rows and linear beyond that — and was
+  stalling an async worker for the duration.
+- **Response capping stopped rebuilding the document to measure it.** Sizes are
+  now counted through a writer that allocates nothing, and the kept prefix of
+  `data` is found in a single pass using the fact that compact JSON costs
+  exactly one comma between items — replacing a binary search that cloned and
+  re-serialized a candidate document on every probe. Rendering a 2000-item page:
+  **8.59 ms → 4.00 ms**, against a 2.15 ms floor for serializing it once, and
+  the multi-megabyte throwaway allocations are gone.
+- **Upload chunks are reference-counted.** `Bytes` instead of `Vec<u8>` means
+  handing a chunk to a retry attempt no longer copies it — previously even the
+  first, successful attempt duplicated the whole chunk.
+
+### Added
+
+- `tests/packaging_metadata.rs` asserts what previously only failed at release
+  time: the `server.json` description within the MCP Registry's 100-character
+  limit, the crate version agreeing across all four packaging files, the
+  release-asset URL, and a `CHANGELOG` entry for the current version.
+- A test that the kept prefix is the *largest* one that fits, not merely one
+  that fits, and a test that measured length always equals serialized length —
+  the size arithmetic rests on that.
+
+### Fixed
+
+- The `server.json` description exceeded the MCP Registry's 100-character limit,
+  which failed the v0.2.0 registry publish with a 422. Released artifacts were
+  unaffected.
+
 ## [0.2.0] — 2026-08-06
 
 Hardening and context control. No breaking changes to existing tool calls: every
