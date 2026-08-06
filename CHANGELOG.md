@@ -3,6 +3,36 @@
 All notable changes to `appstore-mcp`. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-08-06
+
+The two minor items left over from 0.3.0's profiling. Internal only — no tool,
+parameter, or output change.
+
+### Changed
+
+- **The release binary is 25.8% smaller**: 8.15 MB → 6.05 MB, via whole-program
+  LTO in a single codegen unit. It adds ~42 s to a full release build, which
+  only runs in the release workflow and in parallel across the three platforms,
+  while the binary ships three times over inside every `.mcpb`. Debug and test
+  builds are unaffected.
+
+  `panic = "abort"` would shrink it further and was deliberately not used: a
+  panic in one tool handler would take the whole server down rather than failing
+  that single call, and an MCP client on stdio would lose its session.
+
+- **Deduplicating `included` resources across pages is no longer quadratic.**
+  `merge_page` rebuilt its seen-set from every resource accumulated so far on
+  each page, so a 20-page walk re-hashed the same resources nineteen times over.
+  The set is now built once in `get_paged` and carried through. Identities are
+  also one allocation instead of two. Worst case (20 pages × 200 sideloaded
+  resources): **6.00 ms → 2.76 ms**.
+
+### Added
+
+- Tests that the seen-set survives across all pages rather than just the last,
+  that `get_paged` deduplicates sideloaded resources over HTTP, and that a
+  resource identity cannot confuse `("ab", "c")` with `("a", "bc")`.
+
 ## [0.3.0] — 2026-08-06
 
 Performance and resource use, driven by measurement rather than guesswork.
