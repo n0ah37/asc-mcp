@@ -85,7 +85,9 @@ fn the_release_asset_url_points_at_this_version() {
     // committed file means the repo disagrees with what was actually published.
     let version = env!("CARGO_PKG_VERSION");
     let server = read_json("server.json");
-    let identifier = server["packages"][0]["identifier"].as_str().expect("identifier");
+    let identifier = server["packages"][0]["identifier"]
+        .as_str()
+        .expect("identifier");
     assert!(
         identifier.contains(&format!("/v{version}/")),
         "server.json package identifier does not reference v{version}: {identifier}"
