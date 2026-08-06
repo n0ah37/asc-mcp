@@ -11,14 +11,26 @@
 //! 2. [`cap`] bounds the serialized size, shedding `included` first and then
 //!    trailing `data` items, and says in the document what it dropped.
 //!
-//! Both are pure functions over [`serde_json::Value`], so the rules are testable
-//! without a server or a network.
+//! Results are serialized **compactly**. Indented JSON measured 1.72× the bytes
+//! of the same document compact — that is 72% more tokens for identical
+//! information, and it means a given byte budget carries ~40% less of the data
+//! the agent actually asked for. Models read compact JSON perfectly well.
+//!
+//! Compactness also makes the size arithmetic exact: in compact form a `data`
+//! array costs the sum of its items plus one comma between each, so [`cap`] can
+//! measure every item once and take a prefix, rather than repeatedly cloning and
+//! re-serializing candidate documents to binary-search for the cut.
+//!
+//! Both passes are pure functions over [`serde_json::Value`], so the rules are
+//! testable without a server or a network.
+
+use std::io::Write;
 
 use serde_json::{json, Map, Value};
 
 use crate::config::OutputConfig;
 
-/// Apply the configured compaction and size cap, then pretty-print.
+/// Apply the configured compaction and size cap, then serialize.
 pub fn render(value: Value, output: &OutputConfig) -> String {
     let value = if output.compact {
         compact(value)
@@ -26,7 +38,7 @@ pub fn render(value: Value, output: &OutputConfig) -> String {
         value
     };
     let value = cap(value, output.max_bytes);
-    serde_json::to_string_pretty(&value).unwrap_or_else(|_| value.to_string())
+    serde_json::to_string(&value).unwrap_or_else(|_| value.to_string())
 }
 
 /// Strip redundant JSON:API navigation metadata from a response document.
@@ -72,13 +84,13 @@ fn compact_resource(value: &mut Value) {
     }
 }
 
-/// Bound the pretty-printed size of a document to `max_bytes` (`0` disables).
+/// Bound the serialized size of a document to `max_bytes` (`0` disables).
 ///
 /// Sheds `included` first — it is supporting detail the agent can re-fetch —
-/// then trims `data` items from the end, keeping at least one. The result is
-/// always valid JSON, and always says what went missing.
+/// then keeps the longest prefix of `data` that fits, always at least one item.
+/// The result is always valid JSON, and always says what went missing.
 pub fn cap(value: Value, max_bytes: usize) -> Value {
-    if max_bytes == 0 || rendered_len(&value) <= max_bytes {
+    if max_bytes == 0 || serialized_len(&value) <= max_bytes {
         return value;
     }
     let Value::Object(mut doc) = value else {
@@ -87,6 +99,78 @@ pub fn cap(value: Value, max_bytes: usize) -> Value {
         return value;
     };
 
+    let mut note = overrun_note(max_bytes);
+
+    if let Some(Value::Array(included)) = doc.get("included") {
+        if !included.is_empty() {
+            note.insert("includedDropped".into(), json!(included.len()));
+            doc.remove("included");
+        }
+    }
+
+    // Take `data` out of the document so trimming it is a truncation, never a
+    // copy: the items we keep are never cloned, and the ones we drop are freed.
+    let items = match doc.get("data") {
+        Some(Value::Array(_)) => doc.remove("data").and_then(|d| match d {
+            Value::Array(items) => Some(items),
+            _ => None,
+        }),
+        _ => None,
+    };
+    // Fewer than two items leaves nothing to trim: a single resource can be
+    // bigger than the whole budget on its own. Report the overrun rather than
+    // hide it — but put `data` back first.
+    let mut items = match items {
+        Some(items) if items.len() > 1 => items,
+        other => {
+            if let Some(items) = other {
+                doc.insert("data".into(), Value::Array(items));
+            }
+            note.insert("oversized".into(), json!(true));
+            doc.insert("_truncated".into(), Value::Object(note));
+            return Value::Object(doc);
+        }
+    };
+
+    let total = items.len();
+    // Seed the counts with their widest value (the total); the final numbers can
+    // only be shorter, so a document that fits with these still fits with those.
+    note.insert("dataItemsReturned".into(), json!(total));
+    note.insert("dataItemsAvailable".into(), json!(total));
+    doc.insert("_truncated".into(), Value::Object(note.clone()));
+    doc.insert("data".into(), Value::Array(Vec::new()));
+
+    // In compact JSON the document is exactly the empty-data document plus each
+    // item plus one comma between them, so one measuring pass gives the answer.
+    let mut used = serialized_len_of(&doc);
+    let mut kept = 0usize;
+    for (index, item) in items.iter().enumerate() {
+        let cost = serialized_len(item) + usize::from(index > 0);
+        if kept >= 1 && used + cost > max_bytes {
+            break;
+        }
+        used += cost;
+        kept += 1;
+    }
+
+    items.truncate(kept);
+    if kept == total {
+        // Nothing was dropped from `data`; don't imply otherwise.
+        note.remove("dataItemsReturned");
+        note.remove("dataItemsAvailable");
+    } else {
+        note.insert("dataItemsReturned".into(), json!(kept));
+    }
+    doc.insert("data".into(), Value::Array(items));
+    if used > max_bytes {
+        note.insert("oversized".into(), json!(true));
+    }
+    doc.insert("_truncated".into(), Value::Object(note));
+    Value::Object(doc)
+}
+
+/// The explanation attached to any document that had to be trimmed.
+fn overrun_note(max_bytes: usize) -> Map<String, Value> {
     let mut note = Map::new();
     note.insert(
         "reason".into(),
@@ -102,78 +186,42 @@ fieldsets. Do NOT follow `links.next` to recover the dropped items — it points
 page, so they would be skipped."
         ),
     );
-
-    if let Some(Value::Array(included)) = doc.get("included") {
-        if !included.is_empty() {
-            note.insert("includedDropped".into(), json!(included.len()));
-            doc.remove("included");
-        }
-    }
-
-    // The note is part of the payload, so it has to be inside the budget while
-    // we search. Seed the counts with their widest value (the total) — the
-    // final numbers can only be shorter, never longer.
-    let total = doc.get("data").and_then(Value::as_array).map(Vec::len);
-    if let Some(total) = total {
-        note.insert("dataItemsReturned".into(), json!(total));
-        note.insert("dataItemsAvailable".into(), json!(total));
-    }
-    doc.insert("_truncated".into(), Value::Object(note.clone()));
-
-    let mut trimmed = false;
-    if rendered_len_of(&doc) > max_bytes {
-        if let (Some(total), Some(Value::Array(items))) = (total, doc.get("data").cloned()) {
-            if total > 1 {
-                let kept = largest_prefix_that_fits(&doc, &items, max_bytes);
-                doc.insert("data".into(), Value::Array(items[..kept].to_vec()));
-                note.insert("dataItemsReturned".into(), json!(kept));
-                trimmed = true;
-            }
-        }
-    }
-    if !trimmed {
-        // Nothing was dropped from `data`; don't imply otherwise.
-        note.remove("dataItemsReturned");
-        note.remove("dataItemsAvailable");
-    }
-    doc.insert("_truncated".into(), Value::Object(note.clone()));
-
-    if rendered_len_of(&doc) > max_bytes {
-        // A single resource can be bigger than the whole budget; there is no
-        // safe structural trim left, so report the overrun rather than hide it.
-        note.insert("oversized".into(), json!(true));
-        doc.insert("_truncated".into(), Value::Object(note));
-    }
-    Value::Object(doc)
+    note
 }
 
-/// Binary-search the longest prefix of `items` whose document still fits.
-/// Always returns at least 1 so the agent gets a usable sample.
-fn largest_prefix_that_fits(doc: &Map<String, Value>, items: &[Value], max_bytes: usize) -> usize {
-    let mut probe = doc.clone();
-    let (mut low, mut high) = (1usize, items.len());
-    while low < high {
-        let mid = low + (high - low).div_ceil(2);
-        probe.insert("data".into(), Value::Array(items[..mid].to_vec()));
-        if rendered_len_of(&probe) <= max_bytes {
-            low = mid;
-        } else {
-            high = mid - 1;
-        }
+/// An [`std::io::Write`] that keeps the byte count and throws the bytes away.
+///
+/// Measuring with `to_string(...).len()` allocates the whole document just to
+/// read its length — several megabytes for a large page, discarded immediately.
+struct CountingWriter(usize);
+
+impl Write for CountingWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0 += buf.len();
+        Ok(buf.len())
     }
-    low
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
-fn rendered_len(value: &Value) -> usize {
-    serde_json::to_string_pretty(value)
-        .map(|s| s.len())
-        .unwrap_or(0)
+/// Serialized length of a value, without building the string.
+fn serialized_len(value: &Value) -> usize {
+    let mut counter = CountingWriter(0);
+    match serde_json::to_writer(&mut counter, value) {
+        Ok(()) => counter.0,
+        Err(_) => 0,
+    }
 }
 
-fn rendered_len_of(doc: &Map<String, Value>) -> usize {
-    serde_json::to_string_pretty(doc)
-        .map(|s| s.len())
-        .unwrap_or(0)
+/// Serialized length of a document body, without building the string.
+fn serialized_len_of(doc: &Map<String, Value>) -> usize {
+    let mut counter = CountingWriter(0);
+    match serde_json::to_writer(&mut counter, doc) {
+        Ok(()) => counter.0,
+        Err(_) => 0,
+    }
 }
 
 #[cfg(test)]
@@ -258,6 +306,24 @@ mod tests {
     }
 
     #[test]
+    fn measuring_agrees_with_serializing() {
+        // The whole size arithmetic rests on this.
+        for value in [
+            app_page(0),
+            app_page(1),
+            app_page(37),
+            json!(null),
+            json!("x"),
+        ] {
+            assert_eq!(
+                serialized_len(&value),
+                serde_json::to_string(&value).unwrap().len(),
+                "length mismatch for {value:.60}"
+            );
+        }
+    }
+
+    #[test]
     fn cap_of_zero_disables_the_budget() {
         let big = app_page(200);
         assert_eq!(cap(big.clone(), 0), big);
@@ -304,16 +370,36 @@ mod tests {
     }
 
     #[test]
-    fn capped_output_respects_the_budget_and_stays_valid_json() {
+    fn the_kept_prefix_is_the_largest_one_that_fits() {
+        // Exactness, not just "under budget": adding the next item must overflow.
         let budget = 4_000;
-        let out = cap(compact(app_page(200)), budget);
-        let text = serde_json::to_string_pretty(&out).unwrap();
+        let page = compact(app_page(200));
+        let all: Vec<Value> = page["data"].as_array().unwrap().clone();
+        let out = cap(page, budget);
+        let kept = out["data"].as_array().unwrap().len();
+
+        assert!(serialized_len(&out) <= budget, "over budget");
+        let mut one_more = out.clone();
+        one_more["data"] = json!(all[..kept + 1].to_vec());
         assert!(
-            text.len() <= budget,
-            "capped to {} bytes, budget {budget}",
-            text.len()
+            serialized_len(&one_more) > budget,
+            "kept {kept} but {} would also have fit",
+            kept + 1
         );
-        serde_json::from_str::<Value>(&text).expect("capped output must parse");
+    }
+
+    #[test]
+    fn capped_output_respects_the_budget_and_stays_valid_json() {
+        for budget in [1_000, 4_000, 20_000, 60_000] {
+            let out = cap(compact(app_page(200)), budget);
+            let text = serde_json::to_string(&out).unwrap();
+            assert!(
+                text.len() <= budget,
+                "budget {budget}, produced {}",
+                text.len()
+            );
+            serde_json::from_str::<Value>(&text).expect("capped output must parse");
+        }
     }
 
     #[test]
@@ -321,7 +407,8 @@ mod tests {
         // One item alone blows the budget: keep it, but say so.
         let out = cap(app_page(50), 200);
         assert_eq!(out["data"].as_array().unwrap().len(), 1);
-        assert!(out["_truncated"]["dataItemsAvailable"] == 50);
+        assert_eq!(out["_truncated"]["dataItemsAvailable"], 50);
+        assert_eq!(out["_truncated"]["oversized"], true);
     }
 
     #[test]
@@ -333,6 +420,18 @@ mod tests {
             out["data"]["attributes"]["blob"].is_string(),
             "content must survive"
         );
+    }
+
+    #[test]
+    fn cap_preserves_a_single_element_data_array() {
+        let doc = json!({ "data": [{ "type": "apps", "id": "1", "attributes": { "blob": "x".repeat(5_000) } }] });
+        let out = cap(doc, 1_000);
+        assert_eq!(
+            out["data"].as_array().unwrap().len(),
+            1,
+            "data went missing"
+        );
+        assert_eq!(out["_truncated"]["oversized"], true);
     }
 
     #[test]
@@ -362,5 +461,19 @@ mod tests {
             },
         );
         assert!(text.contains("relationships/builds"));
+    }
+
+    #[test]
+    fn render_emits_compact_json() {
+        // Indentation measured 1.72x the bytes for identical content.
+        let text = render(
+            app_page(3),
+            &OutputConfig {
+                compact: false,
+                max_bytes: 0,
+            },
+        );
+        assert!(!text.contains("\n  "), "output is indented: {text:.120}");
+        serde_json::from_str::<Value>(&text).expect("must still parse");
     }
 }

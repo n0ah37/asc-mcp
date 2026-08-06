@@ -8,14 +8,20 @@
     {
       "name": "appstore-mcp",
       "source": "./plugins/appstore-mcp",
-      "description": "Apple App Store Connect API — 114 tools (apps, in-app purchases, subscriptions, TestFlight, provisioning, analytics, and more).",
-      "version": "0.2.0",
+      "description": "Apple App Store Connect API \u2014 114 tools (apps, in-app purchases, subscriptions, TestFlight, provisioning, analytics, and more).",
+      "version": "0.3.0",
       "author": {
         "name": "forgeopslabs"
       },
       "homepage": "https://github.com/forgeopslabs/appstore-mcp",
       "license": "MIT",
-      "keywords": ["app-store-connect", "apple", "ios", "appstore", "testflight"]
+      "keywords": [
+        "app-store-connect",
+        "apple",
+        "ios",
+        "appstore",
+        "testflight"
+      ]
     }
   ]
 }
