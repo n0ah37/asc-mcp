@@ -121,7 +121,7 @@ impl AppStoreServer {
             .get("/v1/apps", &query)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Get a single app by ID.
@@ -137,7 +137,7 @@ impl AppStoreServer {
             .get(&format!("/v1/apps/{}", args.app_id), &query)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Update an app's attributes.
@@ -157,7 +157,7 @@ contentRightsDeclaration)."
             .patch(&format!("/v1/apps/{}", args.app_id), body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List an app's appInfos (metadata containers per app version state).
@@ -174,7 +174,7 @@ age-rating relationships for the app."
             .get(&format!("/v1/apps/{}/appInfos", args.app_id), &[])
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Update an appInfo's attributes.
@@ -191,7 +191,7 @@ age-rating relationships for the app."
             .patch(&format!("/v1/appInfos/{}", args.app_info_id), body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Set the age-rating questionnaire answers.
@@ -217,7 +217,7 @@ unrestrictedWebAccess."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a localized app-info entry (name/subtitle/privacy).
@@ -235,7 +235,7 @@ unrestrictedWebAccess."
             .post("/v1/appInfoLocalizations", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Update a localized app-info entry.
@@ -255,7 +255,7 @@ unrestrictedWebAccess."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 }
 

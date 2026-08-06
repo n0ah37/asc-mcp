@@ -69,9 +69,9 @@ GROUPS = [
     ("Xcode Cloud", "Inspect and trigger Xcode Cloud (CI) builds.",
      ["list_ci_products", "list_ci_workflows", "start_ci_build", "get_ci_build_run",
       "list_ci_build_actions"]),
-    ("Analytics reports", "Request and read App Store analytics reports.",
+    ("Analytics reports", "Request, navigate, and download App Store analytics reports.",
      ["request_analytics_report", "list_analytics_reports", "list_analytics_report_instances",
-      "list_analytics_report_segments"]),
+      "list_analytics_report_segments", "download_analytics_segment"]),
     ("Custom product pages", "Marketing product-page variants: pages, versions, localized text, and image sets.",
      ["list_custom_product_pages", "get_custom_product_page", "create_custom_product_page",
       "update_custom_product_page", "delete_custom_product_page",
@@ -112,16 +112,33 @@ def fetch_tools():
     return {t["name"]: t for t in resp["result"]["tools"]}
 
 
+def effect_badge(tool):
+    """The MCP annotations, rendered as a one-line badge."""
+    ann = tool.get("annotations") or {}
+    if ann.get("readOnlyHint"):
+        return "🟢 **Read-only** — safe to call without confirmation."
+    if ann.get("destructiveHint"):
+        return "🔴 **Destructive** — removes or invalidates something."
+    if ann.get("idempotentHint"):
+        return "🟡 **Writes** — sets fields; calling it twice leaves the same state."
+    return "🟡 **Writes** — creates something new; calling it twice creates two."
+
+
 def render(tools):
     covered, out = set(), []
     total = len(tools)
+    read_only = sum(1 for t in tools.values()
+                    if (t.get("annotations") or {}).get("readOnlyHint"))
     out.append("# Tool reference\n")
-    out.append(f"All **{total}** tools exposed by `appstore-mcp`, grouped by domain. "
-               "Auto-generated from the server's live `tools/list` schemas by "
-               "`scripts/gen_tools_doc.py` — regenerate after changing tools.\n")
+    out.append(f"All **{total}** tools exposed by `appstore-mcp`, grouped by domain "
+               f"({read_only} read-only). Auto-generated from the server's live `tools/list` "
+               "schemas by `scripts/gen_tools_doc.py` — regenerate after changing tools.\n")
     out.append("> Required parameters are marked **yes**. IDs are opaque strings returned by the "
                "`list_*`/`get_*` tools — resolve them first. Anything not covered here is reachable "
                "via the generic `appstore_request` / `appstore_list` tools.\n")
+    out.append("> Each tool's badge reflects the MCP annotations it advertises, which clients use "
+               "to decide what needs confirming. Set `ASC_READ_ONLY=1` to serve only the read-only "
+               "tools, or `ASC_TOOLS=<groups>` to serve only some of the sections below.\n")
     out.append("## Contents\n")
     for name, _desc, names in GROUPS:
         anchor = name.lower().replace(" & ", "--").replace(" ", "-").replace("(", "").replace(")", "")
@@ -137,6 +154,7 @@ def render(tools):
                 continue
             covered.add(tn)
             out.append(f"### `{tn}`\n")
+            out.append(effect_badge(t) + "\n")
             out.append((t.get("description") or "").strip() + "\n")
             schema = t.get("inputSchema", {})
             props = schema.get("properties", {})

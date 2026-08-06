@@ -126,7 +126,7 @@ impl AppStoreServer {
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a subscription group.
@@ -151,7 +151,7 @@ impl AppStoreServer {
             .post("/v1/subscriptionGroups", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create an auto-renewable subscription within a group.
@@ -188,7 +188,7 @@ productId, and renewal period (ONE_WEEK..ONE_YEAR)."
             .post("/v1/subscriptions", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Update a subscription.
@@ -207,7 +207,7 @@ productId, and renewal period (ONE_WEEK..ONE_YEAR)."
             .patch(&format!("/v1/subscriptions/{}", args.subscription_id), body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Add a localization to a subscription.
@@ -234,7 +234,7 @@ productId, and renewal period (ONE_WEEK..ONE_YEAR)."
             .post("/v1/subscriptionLocalizations", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Set a subscription's price in a territory.
@@ -272,6 +272,6 @@ price_point_id with list_subscription_price_points). Defaults to territory USA."
             .post("/v1/subscriptionPrices", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 }

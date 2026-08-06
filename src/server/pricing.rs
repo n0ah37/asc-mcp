@@ -59,7 +59,7 @@ impl AppStoreServer {
             .get("/v1/territories", &[("limit".into(), limit.to_string())])
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List available price points for an in-app purchase.
@@ -82,7 +82,7 @@ customerPrice). Use the id with set_iap_price_schedule. Filter by territory to n
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List available price points for a subscription.
@@ -105,6 +105,6 @@ customerPrice). Use the id with set_subscription_price. Filter by territory to n
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 }

@@ -139,7 +139,7 @@ impl AppStoreServer {
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a new in-app purchase.
@@ -180,7 +180,7 @@ afterward."
             .post("/v2/inAppPurchases", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Update an in-app purchase.
@@ -199,7 +199,7 @@ afterward."
             .patch(&format!("/v2/inAppPurchases/{}", args.iap_id), body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Delete an in-app purchase.
@@ -212,7 +212,7 @@ afterward."
             .delete(&format!("/v2/inAppPurchases/{}", args.iap_id))
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(json!({ "deleted": args.iap_id }))
+        self.ok_json(json!({ "deleted": args.iap_id }))
     }
 
     /// Add a localization to an in-app purchase.
@@ -241,7 +241,7 @@ afterward."
             .post("/v1/inAppPurchaseLocalizations", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Set the price of an in-app purchase by creating a price schedule.
@@ -266,7 +266,7 @@ effective immediately."
             .post("/v1/inAppPurchasePriceSchedules", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Upload an App Store review screenshot for an in-app purchase.
@@ -292,7 +292,7 @@ upload → commit, with MD5 verification). Provide a local image file path."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 }
 

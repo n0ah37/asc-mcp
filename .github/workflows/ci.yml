@@ -24,6 +24,10 @@ jobs:
         run: cargo build --locked --verbose
       - name: Test
         run: cargo test --locked --verbose
+      # The invariants of the served tool surface are asserted in Rust
+      # (tests/tool_surface.rs). This checks the other half: that a real client
+      # speaking JSON-RPC over stdio gets a well-formed tools/list back, with no
+      # credentials configured.
       - name: Smoke test (tools/list over stdio, no credentials)
         shell: bash
         run: |
@@ -36,7 +40,8 @@ jobs:
           ( cat rpc.jsonl; sleep 2 ) | "$BIN" > out.jsonl || true
           python3 - <<'PY'
           import json
-          n = 0
+
+          tools = None
           for line in open('out.jsonl'):
               line = line.strip()
               if not line:
@@ -46,9 +51,64 @@ jobs:
               except Exception:
                   continue
               if obj.get('id') == 2:
-                  n = len(obj['result']['tools'])
-          print('tools served:', n)
-          assert n == 113, f'expected 113 tools, got {n}'
+                  tools = obj['result']['tools']
+
+          assert tools, 'no tools/list response'
+          print(f'tools served: {len(tools)}')
+
+          names = [t['name'] for t in tools]
+          assert len(set(names)) == len(names), 'duplicate tool name'
+          # A floor, not a fixed count: adding a tool must not fail CI.
+          assert len(tools) >= 100, f'only {len(tools)} tools served'
+
+          for t in tools:
+              n = t['name']
+              assert t.get('description', '').strip(), f'{n}: no description'
+              schema = t.get('inputSchema') or {}
+              assert schema.get('type') == 'object', f'{n}: input schema is not an object'
+              ann = t.get('annotations') or {}
+              # Without these a client cannot tell list_apps from remove_user.
+              for hint in ('readOnlyHint', 'destructiveHint', 'idempotentHint'):
+                  assert hint in ann, f'{n}: missing {hint}'
+
+          reads = [t['name'] for t in tools if t['annotations']['readOnlyHint']]
+          destructive = [t['name'] for t in tools if t['annotations']['destructiveHint']]
+          print(f'  read-only: {len(reads)}, destructive: {len(destructive)}')
+          assert 'list_apps' in reads, 'list_apps is not marked read-only'
+          assert 'remove_user' in destructive, 'remove_user is not marked destructive'
+          PY
+
+      - name: Smoke test (ASC_READ_ONLY withholds writes)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        env:
+          ASC_READ_ONLY: "1"
+        run: |
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' > rpc.jsonl
+          ( cat rpc.jsonl; sleep 2 ) | target/debug/appstore-mcp > ro.jsonl || true
+          python3 - <<'PY'
+          import json
+          tools = None
+          for line in open('ro.jsonl'):
+              line = line.strip()
+              if not line:
+                  continue
+              try:
+                  obj = json.loads(line)
+              except Exception:
+                  continue
+              if obj.get('id') == 2:
+                  tools = obj['result']['tools']
+          assert tools, 'no tools/list response'
+          names = {t['name'] for t in tools}
+          print(f'read-only mode serves {len(names)} tools')
+          for writer in ('remove_user', 'delete_in_app_purchase', 'update_app'):
+              assert writer not in names, f'{writer} served in read-only mode'
+          assert 'list_apps' in names
+          assert all(t['annotations']['readOnlyHint'] for t in tools)
           PY
 
   lint:
@@ -62,3 +122,24 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
+
+  msrv:
+    name: build on the declared MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked
+
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    # Advisory: a new advisory against a transitive dependency should surface
+    # here, but must not block an unrelated release.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -16,6 +16,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::{push_opt, AppStoreServer};
+use crate::report;
 
 /// The access type for an analytics report request.
 #[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
@@ -100,6 +101,18 @@ pub struct ListAnalyticsReportSegmentsArgs {
     pub limit: Option<u32>,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DownloadAnalyticsSegmentArgs {
+    /// The segment's presigned download URL, taken from a segment's
+    /// `attributes.url` in list_analytics_report_segments. These URLs expire,
+    /// so fetch a fresh one if the download is rejected.
+    pub url: String,
+    /// Maximum data rows to return (default 100, hard maximum 5000). The full
+    /// row count is reported regardless of how many rows come back.
+    #[serde(default)]
+    pub max_rows: Option<usize>,
+}
+
 // ---- Tool impl block --------------------------------------------------------
 
 #[tool_router(router = analytics_router, vis = "pub(crate)")]
@@ -120,7 +133,7 @@ resource including its ID, which you then pass to list_analytics_reports."
             .post("/v1/analyticsReportRequests", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List analytics reports for a report request.
@@ -147,7 +160,7 @@ Returns report resources whose IDs you pass to list_analytics_report_instances."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List instances of an analytics report.
@@ -174,15 +187,14 @@ whose IDs you pass to list_analytics_report_segments."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List segments of an analytics report instance.
     #[tool(
         description = "List the downloadable segments for an analytics report instance. Each \
-segment's attributes include a presigned `url` pointing to a gzipped CSV file, plus \
-`sizeInBytes` and `checksum` — this tool surfaces those download URLs rather than \
-downloading the data itself."
+segment's attributes include a presigned `url` pointing to a gzipped delimited file, plus \
+`sizeInBytes` and `checksum`. Pass that `url` to download_analytics_segment to read the rows."
     )]
     async fn list_analytics_report_segments(
         &self,
@@ -198,7 +210,33 @@ downloading the data itself."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
+    }
+
+    /// Download and parse an analytics report segment.
+    #[tool(
+        description = "Download an analytics report segment and return its contents as JSON rows. \
+Takes the presigned `url` from a segment returned by list_analytics_report_segments, decompresses \
+the gzipped file, and parses it into rows keyed by column name. Returns the column list, the total \
+row count, and up to `max_rows` rows (default 100). This is how you read the actual analytics \
+numbers — the other analytics tools only navigate to the segment."
+    )]
+    async fn download_analytics_segment(
+        &self,
+        Parameters(args): Parameters<DownloadAnalyticsSegmentArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        let bytes = self
+            .client
+            .download_unauthenticated(&args.url)
+            .await
+            .map_err(AppStoreServer::map_err)?;
+
+        let decoded = report::decompress(&bytes).map_err(AppStoreServer::map_err)?;
+        let text = String::from_utf8_lossy(&decoded);
+        let parsed = report::parse(&text, args.max_rows.unwrap_or(report::DEFAULT_MAX_ROWS))
+            .map_err(AppStoreServer::map_err)?;
+
+        self.ok_json(parsed.to_json())
     }
 }
 
@@ -289,5 +327,97 @@ mod tests {
     fn analytics_report_request_body_no_id_field() {
         let b = analytics_report_request_body("app-123", AccessType::Ongoing);
         assert!(b["data"].get("id").is_none());
+    }
+
+    // ---- Segment download, against a mock CDN --------------------------------
+
+    mod download {
+        use super::*;
+        use crate::testing::{result_text, test_server};
+        use std::io::Write;
+        use wiremock::matchers::{method as http_method, path as http_path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        const TSV: &str =
+            "Date\tApp Name\tUnits\n2026-07-01\tMy App\t142\n2026-07-02\tMy App\t97\n";
+
+        fn gzip(bytes: &[u8]) -> Vec<u8> {
+            let mut encoder =
+                flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            encoder.write_all(bytes).unwrap();
+            encoder.finish().unwrap()
+        }
+
+        async fn serve_segment(server: &MockServer, body: Vec<u8>) -> String {
+            Mock::given(http_method("GET"))
+                .and(http_path("/segments/1"))
+                .respond_with(ResponseTemplate::new(200).set_body_bytes(body))
+                .expect(1)
+                .mount(server)
+                .await;
+            format!("{}/segments/1", server.uri())
+        }
+
+        #[tokio::test]
+        async fn a_gzipped_segment_becomes_json_rows() {
+            let mock = MockServer::start().await;
+            let url = serve_segment(&mock, gzip(TSV.as_bytes())).await;
+
+            let result = test_server(&mock.uri())
+                .download_analytics_segment(Parameters(DownloadAnalyticsSegmentArgs {
+                    url,
+                    max_rows: None,
+                }))
+                .await
+                .unwrap();
+
+            let doc: Value = serde_json::from_str(&result_text(&result)).unwrap();
+            assert_eq!(doc["columns"], json!(["Date", "App Name", "Units"]));
+            assert_eq!(doc["totalRows"], 2);
+            assert_eq!(doc["truncated"], false);
+            assert_eq!(doc["rows"][0]["Units"], "142");
+            assert_eq!(doc["rows"][1]["Date"], "2026-07-02");
+        }
+
+        #[tokio::test]
+        async fn max_rows_samples_the_file_without_hiding_its_size() {
+            let mut text = String::from("Date\tUnits\n");
+            for i in 0..250 {
+                text.push_str(&format!("2026-07-{:02}\t{i}\n", i % 28 + 1));
+            }
+            let mock = MockServer::start().await;
+            let url = serve_segment(&mock, gzip(text.as_bytes())).await;
+
+            let result = test_server(&mock.uri())
+                .download_analytics_segment(Parameters(DownloadAnalyticsSegmentArgs {
+                    url,
+                    max_rows: Some(3),
+                }))
+                .await
+                .unwrap();
+
+            let doc: Value = serde_json::from_str(&result_text(&result)).unwrap();
+            assert_eq!(doc["rowsReturned"], 3);
+            assert_eq!(doc["totalRows"], 250);
+            assert_eq!(doc["truncated"], true);
+        }
+
+        #[tokio::test]
+        async fn an_expired_url_reports_apples_status() {
+            let mock = MockServer::start().await;
+            Mock::given(http_method("GET"))
+                .respond_with(ResponseTemplate::new(403).set_body_string("Request has expired"))
+                .mount(&mock)
+                .await;
+
+            let err = test_server(&mock.uri())
+                .download_analytics_segment(Parameters(DownloadAnalyticsSegmentArgs {
+                    url: format!("{}/segments/gone", mock.uri()),
+                    max_rows: None,
+                }))
+                .await
+                .unwrap_err();
+            assert!(err.message.contains("403"), "{}", err.message);
+        }
     }
 }

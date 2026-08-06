@@ -81,7 +81,7 @@ purchase or a subscription. visible_for_all_users is required."
             .post("/v1/promotedPurchases", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Update a promoted purchase's visibility/enabled state.
@@ -99,7 +99,7 @@ purchase or a subscription. visible_for_all_users is required."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Set the display order of an app's promoted purchases.
@@ -117,7 +117,7 @@ IDs in the desired order."
             .patch(&path, body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(json!({ "ordered": args.ordered_promoted_purchase_ids }))
+        self.ok_json(json!({ "ordered": args.ordered_promoted_purchase_ids }))
     }
 
     /// List an app's promoted purchases.
@@ -136,7 +136,7 @@ IDs in the desired order."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 }
 

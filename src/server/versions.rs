@@ -113,7 +113,7 @@ impl AppStoreServer {
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a new App Store version.
@@ -149,7 +149,7 @@ optional release type and copyright)."
             .post("/v1/appStoreVersions", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a localized metadata entry for an App Store version.
@@ -182,7 +182,7 @@ for a version + locale."
             .post("/v1/appStoreVersionLocalizations", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Update a version's localized metadata.
@@ -208,7 +208,7 @@ for a version + locale."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Start a phased (staged) release for a version.
@@ -227,7 +227,7 @@ set the initial state (defaults to ACTIVE)."
             .post("/v1/appStoreVersionPhasedReleases", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Update a phased release's state (pause, resume, or complete).
@@ -251,7 +251,7 @@ release to all users immediately."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 }
 

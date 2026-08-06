@@ -91,7 +91,7 @@ Each product corresponds to an app or framework that has been set up for Xcode C
             .get("/v1/ciProducts", &query)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List workflows for an Xcode Cloud product.
@@ -113,7 +113,7 @@ to obtain the ci_product_id."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Start a new Xcode Cloud build run.
@@ -133,7 +133,7 @@ appstore_list { \"path\": \"/v1/ciWorkflows/{workflow_id}/repository/gitReferenc
             .post("/v1/ciBuildRuns", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Get details for a specific Xcode Cloud build run.
@@ -152,7 +152,7 @@ Optionally pass include (e.g. \"builds,workflows\") to embed related resources."
             .get(&format!("/v1/ciBuildRuns/{}", args.build_run_id), &query)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List the build actions for a specific Xcode Cloud build run.
@@ -174,7 +174,7 @@ Xcode Cloud build run. Use get_ci_build_run or start_ci_build to obtain the buil
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 }
 

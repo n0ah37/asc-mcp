@@ -6,7 +6,7 @@ lifecycle — apps & metadata, in-app purchases, subscriptions and their offers,
 pricing & availability, App Store versions, App Review submission, TestFlight,
 provisioning & signing, asset uploads, promoted purchases, customer reviews,
 phased release, users & access, in-app events, Xcode Cloud, and analytics
-reports — across **113 tools**, and can reach *any* other App Store Connect
+reports — across **114 tools**, and can reach *any* other App Store Connect
 endpoint through two generic JSON:API tools.
 
 Built on the official [`rmcp`](https://crates.io/crates/rmcp) SDK over stdio.
@@ -14,13 +14,18 @@ Built on the official [`rmcp`](https://crates.io/crates/rmcp) SDK over stdio.
 📖 **[Full tool reference → docs/TOOLS.md](docs/TOOLS.md)** — every tool's purpose
 and parameters.
 
+Every tool is labelled with MCP annotations, so a client can tell `list_apps`
+from `remove_user`. You can serve only the domains you need (`ASC_TOOLS`) or only
+the tools that cannot write (`ASC_READ_ONLY`) — see
+[Choosing which tools to serve](#choosing-which-tools-to-serve).
+
 ## Design: hybrid coverage
 
 The App Store Connect API has hundreds of endpoints but is uniformly
 [JSON:API](https://jsonapi.org). Rather than a tool per endpoint, this server is
 **hybrid**:
 
-- **Curated tools** (111) for the common, multi-step, or error-prone workflows —
+- **Curated tools** (112) for the common, multi-step, or error-prone workflows —
   apps & metadata, IAPs, subscriptions & offers, versions, pricing, availability,
   App Review submission, TestFlight, provisioning, asset uploads, promoted
   purchases, customer reviews, phased release, users, in-app events, Xcode Cloud,
@@ -51,7 +56,7 @@ The App Store Connect API has hundreds of endpoints but is uniformly
 | **Users & access** | `list_users`, `invite_user`, `update_user`, `remove_user` |
 | **In-app events** | `create_app_event`, `create_app_event_localization`, `upload_app_event_screenshot` |
 | **Xcode Cloud** | `list_ci_products`, `list_ci_workflows`, `start_ci_build`, `get_ci_build_run`, `list_ci_build_actions` |
-| **Analytics reports** | `request_analytics_report`, `list_analytics_reports`, `list_analytics_report_instances`, `list_analytics_report_segments` |
+| **Analytics reports** | `request_analytics_report`, `list_analytics_reports`, `list_analytics_report_instances`, `list_analytics_report_segments`, `download_analytics_segment` |
 | **Custom product pages** | `list_custom_product_pages`, `get_custom_product_page`, `create_custom_product_page`, `update_custom_product_page`, `delete_custom_product_page`, `list_custom_product_page_versions`, `create_custom_product_page_version`, `list_custom_product_page_localizations`, `create_custom_product_page_localization`, `update_custom_product_page_localization`, `create_cpp_screenshot_set`, `create_cpp_preview_set` |
 
 See **[docs/TOOLS.md](docs/TOOLS.md)** for each tool's description and parameters. Custom product page
@@ -134,6 +139,65 @@ short-lived **ES256 JWT** signed by your key (cached and refreshed automatically
 > The server starts even without credentials so a client can list its tools;
 > tool calls then return an actionable configuration error until creds are set.
 
+## Choosing which tools to serve
+
+A hundred tool definitions cost context in every session, and a client that sees
+one flat list can't tell a read from a delete. Two knobs fix that:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ASC_TOOLS` | all | Comma-separated tool groups to serve, or the preset `core`. |
+| `ASC_READ_ONLY` | `0` | Serve only tools that cannot modify the account. |
+
+```bash
+ASC_TOOLS=core                     # 41 tools: generic, apps, versions, assets, testflight, submission
+ASC_TOOLS=testflight,provisioning  # just what a build-distribution agent needs
+ASC_READ_ONLY=1                    # 35 read-only tools; writes are withheld entirely
+```
+
+Groups: `generic`, `apps`, `iap`, `subscriptions`, `versions`, `pricing`,
+`availability`, `submission`, `testflight`, `provisioning`, `assets`, `offers`,
+`offer-codes`, `promotions`, `reviews`, `users`, `events`, `xcode-cloud`,
+`analytics`, `custom-product-pages` — plus `all` and `core`. An unrecognised name
+is warned about on stderr and serves nothing rather than quietly falling back to
+everything.
+
+In read-only mode `appstore_request` is kept but refuses any method other than
+`GET`, so the escape hatch still reaches endpoints without a curated tool without
+becoming a way around the restriction.
+
+Every served tool advertises MCP annotations (`readOnlyHint`, `destructiveHint`,
+`idempotentHint`), which clients use to decide what needs confirming. Nine tools
+are marked destructive: the seven `delete_*`/`remove_*` tools, `expire_build`,
+`disable_bundle_id_capability`, and `appstore_request` (which can reach any
+`DELETE` endpoint).
+
+## Tuning
+
+Defaults are chosen so a tool call can't hang and a single response can't swamp
+an agent's context. All of these are optional.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ASC_TIMEOUT_SECS` | `60` | Whole-request timeout. `0` disables. |
+| `ASC_CONNECT_TIMEOUT_SECS` | `10` | Connect timeout. `0` disables. |
+| `ASC_TRANSFER_TIMEOUT_SECS` | `300` | Timeout for asset uploads and report downloads. |
+| `ASC_MAX_RETRIES` | `3` | Retries after the first attempt. `0` disables. |
+| `ASC_MAX_RESPONSE_BYTES` | `60000` | Tool-result size cap. `0` disables. |
+| `ASC_COMPACT_RESPONSES` | `1` | Strip redundant JSON:API links from responses. |
+
+**Retries.** A `429` is replayed for any method, since Apple rejected the request
+without applying it. A `5xx` or a mid-flight timeout is replayed only for
+`GET`/`PATCH`/`PUT`/`DELETE` — never `POST`, which could otherwise create a
+duplicate resource (and Apple permanently reserves identifiers like a product
+ID). Backoff is exponential with jitter and honours `Retry-After`.
+
+**Response shaping.** Per-resource `self` links and link-only relationships are
+stripped — no addressable content is lost, and `links.next` survives for
+pagination. If a response still exceeds the budget, `included` is dropped first,
+then trailing `data` items, and the result carries a `_truncated` key saying what
+went missing and how to narrow the query.
+
 ## Build & run
 
 ```bash
@@ -178,9 +242,19 @@ npx @modelcontextprotocol/inspector ./target/release/appstore-mcp
   `list_subscription_price_points` to get the `id` for `set_iap_price_schedule` /
   `set_subscription_price`.
 - **Asset uploads** (`upload_*`) take a local file path and run the full reserve →
-  chunked upload → MD5 commit flow in one call. Screenshots/previews require an
-  existing `appScreenshotSet` / `appPreviewSet`; create those with the generic
-  tools if needed.
+  chunked upload → MD5 commit flow in one call. The file is streamed, so peak
+  memory is one chunk rather than the size of the asset, and a chunk that fails
+  is retried on its own. Screenshots/previews require an existing
+  `appScreenshotSet` / `appPreviewSet`; create those with the generic tools if
+  needed.
+- **Pagination.** `appstore_list` returns one page by default. Pass
+  `max_pages` (up to 20) to follow `links.next` and merge the pages into one
+  result — `meta.hasMore` tells you whether anything is left.
+- **Analytics data.** `request_analytics_report` → `list_analytics_reports` →
+  `list_analytics_report_instances` → `list_analytics_report_segments` gets you a
+  presigned segment URL; `download_analytics_segment` fetches it, gunzips it, and
+  returns the rows as JSON. Apple can take up to 48 hours to generate the first
+  report for a new request.
 - **Anything not listed** is reachable via `appstore_request` (raw method + path +
   JSON:API body) or `appstore_list` (paginated GET). Example:
   `appstore_request { "method": "GET", "path": "/v1/apps/123/customerReviews" }`.
@@ -200,10 +274,20 @@ npx @modelcontextprotocol/inspector ./target/release/appstore-mcp
 ## Development
 
 ```bash
-cargo test                              # unit tests (JWT signing, MD5, body builders)
+cargo test                              # 200+ tests, no network or credentials needed
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 ```
+
+Tests come in three layers: pure unit tests for request-body builders, retry
+decisions, and response shaping; [`wiremock`](https://crates.io/crates/wiremock)
+tests that drive the real HTTP client against a mock API (retries, timeouts,
+pagination, the three-step upload protocol, segment downloads); and
+`tests/tool_surface.rs`, which asserts the invariants of what a client actually
+sees — unique names, real descriptions, object schemas, correct annotations, and
+that `ASC_TOOLS`/`ASC_READ_ONLY` withhold exactly what they claim to.
+
+The minimum supported Rust version is **1.88**, checked by its own CI job.
 
 Regenerate the tool reference after adding/changing tools (needs the release
 binary; no credentials required):
