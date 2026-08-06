@@ -10,6 +10,7 @@ mod analytics;
 mod apps;
 mod assets;
 mod availability;
+pub mod catalog;
 mod custom_product_pages;
 mod events;
 mod generic;
@@ -39,6 +40,7 @@ use serde_json::Value;
 use crate::client::AscClient;
 use crate::config::Config;
 use crate::error::AscError;
+use catalog::Group;
 
 /// Server instructions shown to MCP clients to orient the agent.
 const INSTRUCTIONS: &str = "\
@@ -64,6 +66,13 @@ Tips:
 - Pricing requires a price-point ID: use the pricing tools to look them up.
 - Most write operations use JSON:API bodies of the form \
   {\"data\": {\"type\": ..., \"attributes\": {...}, \"relationships\": {...}}}.
+- `appstore_list` can walk pages for you: pass `max_pages` instead of calling it \
+  again with each `cursor`.
+- Responses are trimmed to fit a context budget. A `_truncated` key means items \
+  were dropped — narrow the query with `limit`/`filter[...]`/`fields[...]` rather \
+  than assuming you saw everything.
+- Analytics report data is downloaded with `download_analytics_segment` using a \
+  segment URL from `list_analytics_report_segments`.
 
 Limitations (enforced by Apple, not this server):
 - New apps CANNOT be created via the API (the `apps` resource allows only \
@@ -79,37 +88,99 @@ pub struct AppStoreServer {
 }
 
 impl AppStoreServer {
-    /// Build the server from configuration, assembling all per-domain routers.
+    /// Build the server from configuration, assembling the per-domain routers
+    /// into the subset this configuration serves (see [`catalog`]).
     pub fn new(config: Config) -> Self {
+        let tools = config.tools.clone();
+        let assembled = catalog::assemble(Self::domain_routers(), &tools);
+
+        for warning in &assembled.warnings {
+            tracing::warn!("{warning}");
+        }
+        if !assembled.unclassified.is_empty() {
+            tracing::error!(
+                tools = ?assembled.unclassified,
+                "these tools' names start with a verb `server::catalog::VERBS` doesn't know, so \
+                 they are served without safety annotations; classify them there"
+            );
+        }
+        tracing::info!(
+            served = assembled.router.map.len(),
+            withheld = assembled.withheld,
+            read_only = tools.read_only,
+            groups = assembled
+                .groups
+                .iter()
+                .map(|g| g.as_str())
+                .collect::<Vec<_>>()
+                .join(","),
+            "assembled tool router"
+        );
+
         Self {
             client: Arc::new(AscClient::new(config)),
-            tool_router: Self::generic_router()
-                + Self::analytics_router()
-                + Self::apps_router()
-                + Self::iap_router()
-                + Self::subscriptions_router()
-                + Self::versions_router()
-                + Self::pricing_router()
-                + Self::testflight_router()
-                + Self::provisioning_router()
-                + Self::assets_router()
-                + Self::submission_router()
-                + Self::availability_router()
-                + Self::events_router()
-                + Self::offers_router()
-                + Self::offer_codes_router()
-                + Self::promotions_router()
-                + Self::reviews_router()
-                + Self::users_router()
-                + Self::xcode_cloud_router()
-                + Self::custom_product_pages_router(),
+            tool_router: assembled.router,
         }
     }
 
-    /// Render a JSON value as a pretty-printed text tool result.
-    pub(crate) fn ok_json(value: Value) -> Result<CallToolResult, McpError> {
-        let text = serde_json::to_string_pretty(&value).unwrap_or_else(|_| value.to_string());
+    /// Every domain router, tagged with the group it belongs to.
+    fn domain_routers() -> Vec<(Group, ToolRouter<Self>)> {
+        vec![
+            (Group::Generic, Self::generic_router()),
+            (Group::Apps, Self::apps_router()),
+            (Group::Iap, Self::iap_router()),
+            (Group::Subscriptions, Self::subscriptions_router()),
+            (Group::Versions, Self::versions_router()),
+            (Group::Pricing, Self::pricing_router()),
+            (Group::Availability, Self::availability_router()),
+            (Group::Submission, Self::submission_router()),
+            (Group::TestFlight, Self::testflight_router()),
+            (Group::Provisioning, Self::provisioning_router()),
+            (Group::Assets, Self::assets_router()),
+            (Group::Offers, Self::offers_router()),
+            (Group::OfferCodes, Self::offer_codes_router()),
+            (Group::Promotions, Self::promotions_router()),
+            (Group::Reviews, Self::reviews_router()),
+            (Group::Users, Self::users_router()),
+            (Group::Events, Self::events_router()),
+            (Group::XcodeCloud, Self::xcode_cloud_router()),
+            (Group::Analytics, Self::analytics_router()),
+            (
+                Group::CustomProductPages,
+                Self::custom_product_pages_router(),
+            ),
+        ]
+    }
+
+    /// The tools this server serves, sorted by name.
+    pub fn tools(&self) -> Vec<Tool> {
+        let mut tools: Vec<Tool> = self
+            .tool_router
+            .map
+            .values()
+            .map(|route| route.attr.clone())
+            .collect();
+        tools.sort_by(|a, b| a.name.cmp(&b.name));
+        tools
+    }
+
+    /// Render a JSON value as a text tool result, compacted and size-capped per
+    /// [`crate::json`] so one verbose page can't swamp the agent's context.
+    pub(crate) fn ok_json(&self, value: Value) -> Result<CallToolResult, McpError> {
+        let text = crate::json::render(value, &self.client.config.output);
         Ok(CallToolResult::success(vec![Content::text(text)]))
+    }
+
+    /// Refuse an operation that would modify the account on a read-only server.
+    pub(crate) fn ensure_writable(&self, what: &str) -> Result<(), McpError> {
+        if self.client.config.tools.read_only {
+            return Err(AscError::InvalidRequest(format!(
+                "this server is running in read-only mode (ASC_READ_ONLY), so {what} is not \
+                 permitted; unset ASC_READ_ONLY to allow writes"
+            ))
+            .into_mcp_error());
+        }
+        Ok(())
     }
 
     /// Map a client error into an MCP tool error.

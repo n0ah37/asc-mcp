@@ -151,7 +151,7 @@ impl AppStoreServer {
             .get("/v1/builds", &query)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List beta groups.
@@ -168,7 +168,7 @@ impl AppStoreServer {
             .get("/v1/betaGroups", &query)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a beta group.
@@ -195,7 +195,7 @@ impl AppStoreServer {
             .post("/v1/betaGroups", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Add (invite) a beta tester to a group.
@@ -229,7 +229,7 @@ impl AppStoreServer {
             .post("/v1/betaTesters", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Submit a build for beta (external) review.
@@ -253,7 +253,7 @@ impl AppStoreServer {
             .post("/v1/betaAppReviewSubmissions", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Set test notes (What's New) for a build locale.
@@ -275,7 +275,7 @@ PATCH /v1/betaBuildLocalizations/{id}."
             .post("/v1/betaBuildLocalizations", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Update a buildBetaDetail resource.
@@ -295,7 +295,7 @@ GET /v1/builds/{buildId}/buildBetaDetail or by including ?include=buildBetaDetai
             .patch(&path, body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Update the beta app review detail for an app.
@@ -318,7 +318,7 @@ GET /v1/apps/{appId}/betaAppReviewDetail. Only provided fields are sent."
             .patch(&path, body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Expire a build.
@@ -336,7 +336,7 @@ GET /v1/apps/{appId}/betaAppReviewDetail. Only provided fields are sent."
             .patch(&path, body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Add a build to a beta group.
@@ -355,7 +355,7 @@ testers). Uses the betaGroups/{id}/relationships/builds to-many endpoint."
             .post(&path, body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(
+        self.ok_json(
             json!({ "added": { "build_id": args.build_id, "beta_group_id": args.beta_group_id } }),
         )
     }

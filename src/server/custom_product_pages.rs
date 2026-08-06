@@ -158,7 +158,7 @@ impl AppStoreServer {
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Get a custom product page by ID.
@@ -177,7 +177,7 @@ impl AppStoreServer {
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a custom product page.
@@ -202,7 +202,7 @@ create_custom_product_page_version / create_custom_product_page_localization."
             .post("/v1/appCustomProductPages", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Update a custom product page (name and/or visibility).
@@ -222,7 +222,7 @@ create_custom_product_page_version / create_custom_product_page_localization."
             .patch(&format!("/v1/appCustomProductPages/{}", args.page_id), body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Delete a custom product page.
@@ -235,7 +235,7 @@ create_custom_product_page_version / create_custom_product_page_localization."
             .delete(&format!("/v1/appCustomProductPages/{}", args.page_id))
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(json!({ "deleted": args.page_id }))
+        self.ok_json(json!({ "deleted": args.page_id }))
     }
 
     /// List a page's versions.
@@ -257,7 +257,7 @@ create_custom_product_page_version / create_custom_product_page_localization."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a new version of a custom product page.
@@ -275,7 +275,7 @@ A new version is the editable draft you add localizations and images to."
             .post("/v1/appCustomProductPageVersions", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List a version's localizations.
@@ -297,7 +297,7 @@ A new version is the editable draft you add localizations and images to."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Add a localization (promotional text) to a page version.
@@ -319,7 +319,7 @@ given locale. Create screenshot/preview sets against the returned localization I
             .post("/v1/appCustomProductPageLocalizations", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Update a localization's promotional text.
@@ -340,7 +340,7 @@ given locale. Create screenshot/preview sets against the returned localization I
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a screenshot set on a custom product page localization.
@@ -358,7 +358,7 @@ display type APP_IPHONE_67). Upload images into it with upload_app_screenshot."
             .post("/v1/appScreenshotSets", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a preview set on a custom product page localization.
@@ -376,7 +376,7 @@ type IPHONE_67). Upload videos into it with upload_app_preview."
             .post("/v1/appPreviewSets", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 }
 

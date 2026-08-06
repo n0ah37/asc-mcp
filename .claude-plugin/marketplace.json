@@ -8,8 +8,8 @@
     {
       "name": "appstore-mcp",
       "source": "./plugins/appstore-mcp",
-      "description": "Apple App Store Connect API — 113 tools (apps, in-app purchases, subscriptions, TestFlight, provisioning, analytics, and more).",
-      "version": "0.1.0",
+      "description": "Apple App Store Connect API — 114 tools (apps, in-app purchases, subscriptions, TestFlight, provisioning, analytics, and more).",
+      "version": "0.2.0",
       "author": {
         "name": "forgeopslabs"
       },

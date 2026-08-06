@@ -109,7 +109,7 @@ impl AppStoreServer {
             .get("/v1/bundleIds", &list_query(&args))
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Register a new bundle ID.
@@ -132,7 +132,7 @@ impl AppStoreServer {
             .post("/v1/bundleIds", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Enable a capability on a bundle ID.
@@ -156,7 +156,7 @@ extra configuration (e.g. iCloud containers)."
             .post("/v1/bundleIdCapabilities", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Disable (delete) a capability from a bundle ID.
@@ -173,7 +173,7 @@ resource. Pass the capability_id returned from enable_bundle_id_capability or li
             .delete(&format!("/v1/bundleIdCapabilities/{}", args.capability_id))
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(json!({ "deleted": args.capability_id }))
+        self.ok_json(json!({ "deleted": args.capability_id }))
     }
 
     /// List certificates.
@@ -187,7 +187,7 @@ resource. Pass the capability_id returned from enable_bundle_id_capability or li
             .get("/v1/certificates", &list_query(&args))
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a certificate from a CSR.
@@ -212,7 +212,7 @@ resource. Pass the capability_id returned from enable_bundle_id_capability or li
             .post("/v1/certificates", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List registered devices.
@@ -226,7 +226,7 @@ resource. Pass the capability_id returned from enable_bundle_id_capability or li
             .get("/v1/devices", &list_query(&args))
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Register a device.
@@ -252,7 +252,7 @@ resource. Pass the capability_id returned from enable_bundle_id_capability or li
             .post("/v1/devices", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List provisioning profiles.
@@ -266,7 +266,7 @@ resource. Pass the capability_id returned from enable_bundle_id_capability or li
             .get("/v1/profiles", &list_query(&args))
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a provisioning profile.
@@ -306,7 +306,7 @@ device IDs for development/ad-hoc profiles)."
             .post("/v1/profiles", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 }
 

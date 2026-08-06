@@ -1,8 +1,10 @@
 # Tool reference
 
-All **113** tools exposed by `appstore-mcp`, grouped by domain. Auto-generated from the server's live `tools/list` schemas by `scripts/gen_tools_doc.py` — regenerate after changing tools.
+All **114** tools exposed by `appstore-mcp`, grouped by domain (34 read-only). Auto-generated from the server's live `tools/list` schemas by `scripts/gen_tools_doc.py` — regenerate after changing tools.
 
 > Required parameters are marked **yes**. IDs are opaque strings returned by the `list_*`/`get_*` tools — resolve them first. Anything not covered here is reachable via the generic `appstore_request` / `appstore_list` tools.
+
+> Each tool's badge reflects the MCP annotations it advertises, which clients use to decide what needs confirming. Set `ASC_READ_ONLY=1` to serve only the read-only tools, or `ASC_TOOLS=<groups>` to serve only some of the sections below.
 
 ## Contents
 
@@ -25,7 +27,7 @@ All **113** tools exposed by `appstore-mcp`, grouped by domain. Auto-generated f
 - [Users & access](#users--access) (4)
 - [In-app events](#in-app-events) (3)
 - [Xcode Cloud](#xcode-cloud) (5)
-- [Analytics reports](#analytics-reports) (4)
+- [Analytics reports](#analytics-reports) (5)
 - [Custom product pages](#custom-product-pages) (12)
 
 ## Generic
@@ -33,6 +35,8 @@ All **113** tools exposed by `appstore-mcp`, grouped by domain. Auto-generated f
 Reach any endpoint with raw JSON:API.
 
 ### `appstore_request`
+
+🔴 **Destructive** — removes or invalidates something.
 
 Make a raw authenticated request to ANY App Store Connect API endpoint (method + path + optional query + optional JSON:API body). Use this for operations without a dedicated tool. Returns the parsed JSON response.
 
@@ -45,7 +49,9 @@ Make a raw authenticated request to ANY App Store Connect API endpoint (method +
 
 ### `appstore_list`
 
-List any App Store Connect collection with optional filters, sort, include, and pagination. Returns one page; pass the `next` link (from the response's links.next) back as `cursor` to fetch subsequent pages.
+🟢 **Read-only** — safe to call without confirmation.
+
+List any App Store Connect collection with optional filters, sort, include, and pagination. Returns one page by default; set `max_pages` to follow `links.next` and merge several pages into one result, or pass a previous response's links.next back as `cursor` to resume.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -54,6 +60,7 @@ List any App Store Connect collection with optional filters, sort, include, and 
 | `filters` | object | no | Optional filters, e.g. {"filter[name]": "MyApp"}. |
 | `include` | string | no | Comma-separated related resources to include, e.g. "appStoreVersions". |
 | `limit` | integer | no | Page size (App Store Connect maximum is 200). Sparse-fieldset selections (`fields[...]`) can be passed via `filters` if needed. |
+| `max_pages` | integer | no | Follow `links.next` and merge up to this many pages into one result (default 1, maximum 20). Saves a round trip per page. |
 | `sort` | string | no | Comma-separated sort keys, e.g. "-createdDate". |
 
 ## Apps & metadata
@@ -61,6 +68,8 @@ List any App Store Connect collection with optional filters, sort, include, and 
 Read/update apps, app-level metadata, age rating, and localized app name/subtitle.
 
 ### `list_apps`
+
+🟢 **Read-only** — safe to call without confirmation.
 
 List apps on the account, optionally filtered by bundle ID, name, or SKU.
 
@@ -73,6 +82,8 @@ List apps on the account, optionally filtered by bundle ID, name, or SKU.
 
 ### `get_app`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 Get a single app by its App Store Connect ID, with optional includes.
 
 | Parameter | Type | Required | Description |
@@ -81,6 +92,8 @@ Get a single app by its App Store Connect ID, with optional includes.
 | `include` | string | no | Comma-separated related resources to include, e.g. "appInfos,appStoreVersions". |
 
 ### `update_app`
+
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
 
 Update an app's attributes (e.g. primaryLocale, availableInNewTerritories, contentRightsDeclaration).
 
@@ -91,6 +104,8 @@ Update an app's attributes (e.g. primaryLocale, availableInNewTerritories, conte
 
 ### `list_app_infos`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List an app's appInfos — metadata containers holding category and age-rating relationships for the app.
 
 | Parameter | Type | Required | Description |
@@ -98,6 +113,8 @@ List an app's appInfos — metadata containers holding category and age-rating r
 | `app_id` | string | **yes** | The app's App Store Connect ID. |
 
 ### `update_app_info`
+
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
 
 Update an appInfo's attributes by appInfo ID.
 
@@ -108,6 +125,8 @@ Update an appInfo's attributes by appInfo ID.
 
 ### `set_age_rating`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Set an app's age-rating questionnaire answers (required before submission). Pass the ageRatingDeclaration ID and the questionnaire attributes. Enum values are typically NONE / INFREQUENT_OR_MILD / FREQUENT_OR_INTENSE, plus booleans for items like gambling and unrestrictedWebAccess.
 
 | Parameter | Type | Required | Description |
@@ -116,6 +135,8 @@ Set an app's age-rating questionnaire answers (required before submission). Pass
 | `attributes` | object | **yes** | Questionnaire answers, e.g. {"violenceCartoonOrFantasy": "NONE", "gamblingSimulated": "FREQUENT_OR_INTENSE", "unrestrictedWebAccess": false}. |
 
 ### `create_app_info_localization`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create a localized app name, subtitle, and privacy policy for a locale (appInfoLocalizations). This is the app-level name/subtitle, distinct from per-version metadata.
 
@@ -131,6 +152,8 @@ Create a localized app name, subtitle, and privacy policy for a locale (appInfoL
 
 ### `update_app_info_localization`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Update an appInfoLocalization by ID (name, subtitle, privacy URLs/text).
 
 | Parameter | Type | Required | Description |
@@ -144,6 +167,8 @@ Create and manage non-subscription in-app purchases.
 
 ### `list_in_app_purchases`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List an app's in-app purchases (IAP v2), optionally filtered by productId.
 
 | Parameter | Type | Required | Description |
@@ -154,6 +179,8 @@ List an app's in-app purchases (IAP v2), optionally filtered by productId.
 | `product_id` | string | no | Filter by exact productId. |
 
 ### `create_in_app_purchase`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create an in-app purchase (v2): provide a reference name, productId, and type (CONSUMABLE, NON_CONSUMABLE, or NON_RENEWING_SUBSCRIPTION). Add localizations and a price afterward.
 
@@ -169,6 +196,8 @@ Create an in-app purchase (v2): provide a reference name, productId, and type (C
 
 ### `update_in_app_purchase`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Update an in-app purchase's attributes (name, reviewNote, familySharable, etc.).
 
 | Parameter | Type | Required | Description |
@@ -178,6 +207,8 @@ Update an in-app purchase's attributes (name, reviewNote, familySharable, etc.).
 
 ### `delete_in_app_purchase`
 
+🔴 **Destructive** — removes or invalidates something.
+
 Delete an in-app purchase by ID (only allowed before it is approved).
 
 | Parameter | Type | Required | Description |
@@ -185,6 +216,8 @@ Delete an in-app purchase by ID (only allowed before it is approved).
 | `iap_id` | string | **yes** | The in-app purchase ID. |
 
 ### `create_iap_localization`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Add a localized name/description to an in-app purchase for a given locale (e.g. en-US).
 
@@ -197,6 +230,8 @@ Add a localized name/description to an in-app purchase for a given locale (e.g. 
 
 ### `set_iap_price_schedule`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Set an in-app purchase's price by creating a price schedule from a price point (look up the price_point_id with list_iap_price_points). Defaults to base territory USA, effective immediately.
 
 | Parameter | Type | Required | Description |
@@ -207,6 +242,8 @@ Set an in-app purchase's price by creating a price schedule from a price point (
 | `start_date` | string | no | Optional ISO-8601 start date (YYYY-MM-DD). Null/absent means effective immediately. |
 
 ### `upload_iap_review_screenshot`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Upload an App Store review screenshot for an in-app purchase (reserve → upload → commit, with MD5 verification). Provide a local image file path.
 
@@ -221,6 +258,8 @@ Subscription groups, subscriptions, localizations, and prices.
 
 ### `list_subscription_groups`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List an app's subscription groups.
 
 | Parameter | Type | Required | Description |
@@ -230,6 +269,8 @@ List an app's subscription groups.
 
 ### `create_subscription_group`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Create a subscription group for an app (subscriptions live inside a group).
 
 | Parameter | Type | Required | Description |
@@ -238,6 +279,8 @@ Create a subscription group for an app (subscriptions live inside a group).
 | `reference_name` | string | **yes** | Reference name for the subscription group (not customer-facing). |
 
 ### `create_subscription`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create an auto-renewable subscription inside a group: reference name, productId, and renewal period (ONE_WEEK..ONE_YEAR).
 
@@ -252,6 +295,8 @@ Create an auto-renewable subscription inside a group: reference name, productId,
 
 ### `update_subscription`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Update a subscription's attributes (name, groupLevel, familySharable, etc.).
 
 | Parameter | Type | Required | Description |
@@ -260,6 +305,8 @@ Update a subscription's attributes (name, groupLevel, familySharable, etc.).
 | `subscription_id` | string | **yes** | The subscription ID. |
 
 ### `create_subscription_localization`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Add a localized name/description to a subscription for a given locale.
 
@@ -271,6 +318,8 @@ Add a localized name/description to a subscription for a given locale.
 | `description` | string | no | Optional customer-facing description. |
 
 ### `set_subscription_price`
+
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
 
 Set a subscription's price from a price point in a territory (look up the price_point_id with list_subscription_price_points). Defaults to territory USA.
 
@@ -288,6 +337,8 @@ App Store versions and their localized metadata.
 
 ### `list_app_store_versions`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List an app's App Store versions, optionally filtered by state or platform.
 
 | Parameter | Type | Required | Description |
@@ -298,6 +349,8 @@ List an app's App Store versions, optionally filtered by state or platform.
 | `state` | string | no | Filter by version state, e.g. "PREPARE_FOR_SUBMISSION", "READY_FOR_SALE". |
 
 ### `create_app_store_version`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create a new App Store version for an app (platform + version string, with optional release type and copyright).
 
@@ -310,6 +363,8 @@ Create a new App Store version for an app (platform + version string, with optio
 | `release_type` | string | no | Optional release type: "MANUAL", "AFTER_APPROVAL", or "SCHEDULED". |
 
 ### `create_version_localization`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create localized App Store metadata (description, keywords, whatsNew, URLs) for a version + locale.
 
@@ -326,6 +381,8 @@ Create localized App Store metadata (description, keywords, whatsNew, URLs) for 
 
 ### `update_version_localization`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Update an App Store version localization by ID (description, keywords, whatsNew, URLs).
 
 | Parameter | Type | Required | Description |
@@ -339,6 +396,8 @@ Submit versions/IAPs for review and satisfy the metadata gates.
 
 ### `create_review_submission`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Open a new App Review submission for an app + platform. Then attach items with add_review_submission_item and submit with submit_review_submission.
 
 | Parameter | Type | Required | Description |
@@ -347,6 +406,8 @@ Open a new App Review submission for an app + platform. Then attach items with a
 | `platform` | `IOS \| MAC_OS \| TV_OS \| VISION_OS` | **yes** | Target platform. |
 
 ### `add_review_submission_item`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Attach an App Store version or in-app event to an open review submission.
 
@@ -358,6 +419,8 @@ Attach an App Store version or in-app event to an open review submission.
 
 ### `submit_review_submission`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Submit a prepared review submission to App Review (sets submitted=true). All metadata gates (age rating, export compliance, review details) must be satisfied first.
 
 | Parameter | Type | Required | Description |
@@ -365,6 +428,8 @@ Submit a prepared review submission to App Review (sets submitted=true). All met
 | `review_submission_id` | string | **yes** | The review submission ID. |
 
 ### `list_review_submissions`
+
+🟢 **Read-only** — safe to call without confirmation.
 
 List an app's App Review submissions, optionally filtered by state or platform.
 
@@ -376,6 +441,8 @@ List an app's App Review submissions, optionally filtered by state or platform.
 
 ### `submit_in_app_purchase`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Submit a single in-app purchase for App Review (inAppPurchaseSubmissions).
 
 | Parameter | Type | Required | Description |
@@ -383,6 +450,8 @@ Submit a single in-app purchase for App Review (inAppPurchaseSubmissions).
 | `iap_id` | string | **yes** | The in-app purchase ID to submit for review. |
 
 ### `set_app_review_detail`
+
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
 
 Set the App Review contact info, optional demo account, and notes for a version. Pass review_detail_id to update an existing detail; omit it to create one.
 
@@ -401,6 +470,8 @@ Set the App Review contact info, optional demo account, and notes for a version.
 
 ### `create_app_encryption_declaration`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Create an app encryption / export-compliance declaration for an app. Then attach a build with assign_build_encryption_declaration.
 
 | Parameter | Type | Required | Description |
@@ -412,6 +483,8 @@ Create an app encryption / export-compliance declaration for an app. Then attach
 | `contains_third_party_cryptography` | boolean | **yes** | Whether the app uses any third-party encryption. |
 
 ### `assign_build_encryption_declaration`
+
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
 
 Associate a build with an existing app encryption declaration.
 
@@ -426,6 +499,8 @@ Territories and price-point lookups.
 
 ### `list_territories`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List App Store territories (territory IDs like "USA", "GBR", used for pricing).
 
 | Parameter | Type | Required | Description |
@@ -433,6 +508,8 @@ List App Store territories (territory IDs like "USA", "GBR", used for pricing).
 | `limit` | integer | no | Page size (max 200). Defaults to 200 to return all territories in one page. |
 
 ### `list_iap_price_points`
+
+🟢 **Read-only** — safe to call without confirmation.
 
 List the available price points for an in-app purchase (each has an id and customerPrice). Use the id with set_iap_price_schedule. Filter by territory to narrow results.
 
@@ -443,6 +520,8 @@ List the available price points for an in-app purchase (each has an id and custo
 | `territory` | string | no | Filter to a single territory, e.g. "USA". Recommended to keep results small. |
 
 ### `list_subscription_price_points`
+
+🟢 **Read-only** — safe to call without confirmation.
 
 List the available price points for a subscription (each has an id and customerPrice). Use the id with set_subscription_price. Filter by territory to narrow results.
 
@@ -458,6 +537,8 @@ Control which territories products/apps are sold in.
 
 ### `set_iap_availability`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Set the territories an in-app purchase is available in (territory IDs from list_territories).
 
 | Parameter | Type | Required | Description |
@@ -468,6 +549,8 @@ Set the territories an in-app purchase is available in (territory IDs from list_
 
 ### `set_subscription_availability`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Set the territories a subscription is available in (territory IDs from list_territories).
 
 | Parameter | Type | Required | Description |
@@ -477,6 +560,8 @@ Set the territories a subscription is available in (territory IDs from list_terr
 | `territory_ids` | array of string | **yes** | Territory IDs to make the product available in, e.g. ["USA", "GBR"]. |
 
 ### `set_app_availability`
+
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
 
 Set the territories an app is available in (territory IDs from list_territories). Uses the App Availability v2 API.
 
@@ -492,6 +577,8 @@ Builds, beta groups, testers, beta review, and build details.
 
 ### `list_builds`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List TestFlight builds, optionally filtered by app or build version.
 
 | Parameter | Type | Required | Description |
@@ -503,6 +590,8 @@ List TestFlight builds, optionally filtered by app or build version.
 
 ### `list_beta_groups`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List TestFlight beta groups, optionally filtered by app.
 
 | Parameter | Type | Required | Description |
@@ -511,6 +600,8 @@ List TestFlight beta groups, optionally filtered by app.
 | `limit` | integer | no | Page size (max 200). |
 
 ### `create_beta_group`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create a TestFlight beta group for an app.
 
@@ -521,6 +612,8 @@ Create a TestFlight beta group for an app.
 | `public_link_enabled` | boolean | no | Whether this is a public-link group. |
 
 ### `add_beta_tester`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Add a beta tester (by email) to a TestFlight beta group, sending an invite.
 
@@ -533,6 +626,8 @@ Add a beta tester (by email) to a TestFlight beta group, sending an invite.
 
 ### `submit_build_for_beta_review`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Submit a build for TestFlight beta app review (required before external testing).
 
 | Parameter | Type | Required | Description |
@@ -540,6 +635,8 @@ Submit a build for TestFlight beta app review (required before external testing)
 | `build_id` | string | **yes** | The build ID to submit for beta (external) review. |
 
 ### `set_build_test_notes`
+
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
 
 Set the TestFlight 'What's New' test notes for a build in a specific locale (creates a betaBuildLocalization). locale is required (e.g. "en-US"); whats_new is the tester-facing 'What to Test' text shown in the TestFlight app. To update an existing localization instead of creating one, use appstore_request with PATCH /v1/betaBuildLocalizations/{id}.
 
@@ -551,6 +648,8 @@ Set the TestFlight 'What's New' test notes for a build in a specific locale (cre
 
 ### `set_build_beta_detail`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Update the beta detail for a build, e.g. toggle auto-notify. The build_beta_detail_id is the buildBetaDetail resource ID — find it via GET /v1/builds/{buildId}/buildBetaDetail or by including ?include=buildBetaDetail on a build fetch.
 
 | Parameter | Type | Required | Description |
@@ -559,6 +658,8 @@ Update the beta detail for a build, e.g. toggle auto-notify. The build_beta_deta
 | `auto_notify_enabled` | boolean | no | Whether to automatically notify testers when the build becomes available. |
 
 ### `set_beta_app_review_detail`
+
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
 
 Update the TestFlight beta app review contact info, demo account, and notes for an app. beta_app_review_detail_id is the betaAppReviewDetail resource ID — find it via GET /v1/apps/{appId}/betaAppReviewDetail. Only provided fields are sent.
 
@@ -576,6 +677,8 @@ Update the TestFlight beta app review contact info, demo account, and notes for 
 
 ### `expire_build`
 
+🔴 **Destructive** — removes or invalidates something.
+
 Mark a TestFlight build as expired so it is no longer available to testers.
 
 | Parameter | Type | Required | Description |
@@ -583,6 +686,8 @@ Mark a TestFlight build as expired so it is no longer available to testers.
 | `build_id` | string | **yes** | The build ID to expire. |
 
 ### `add_build_to_beta_group`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Add a build to a TestFlight beta group (makes it available for that group's testers). Uses the betaGroups/{id}/relationships/builds to-many endpoint.
 
@@ -597,6 +702,8 @@ Bundle IDs (+ capabilities), certificates, devices, profiles.
 
 ### `list_bundle_ids`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List registered bundle IDs.
 
 | Parameter | Type | Required | Description |
@@ -605,6 +712,8 @@ List registered bundle IDs.
 | `limit` | integer | no | Page size (max 200). |
 
 ### `create_bundle_id`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Register a new bundle ID (name, reverse-DNS identifier, platform).
 
@@ -617,6 +726,8 @@ Register a new bundle ID (name, reverse-DNS identifier, platform).
 
 ### `enable_bundle_id_capability`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Enable a capability on a registered bundle ID. Provide the bundle_id resource ID and the capability_type (e.g. PUSH_NOTIFICATIONS, ICLOUD, APP_GROUPS, ASSOCIATED_DOMAINS, SIGN_IN_WITH_APPLE). Pass settings only for capabilities that require extra configuration (e.g. iCloud containers).
 
 | Parameter | Type | Required | Description |
@@ -627,6 +738,8 @@ Enable a capability on a registered bundle ID. Provide the bundle_id resource ID
 
 ### `disable_bundle_id_capability`
 
+🔴 **Destructive** — removes or invalidates something.
+
 Disable a capability on a bundle ID by deleting the bundleIdCapabilities resource. Pass the capability_id returned from enable_bundle_id_capability or list_bundle_ids (include=bundleIdCapabilities).
 
 | Parameter | Type | Required | Description |
@@ -634,6 +747,8 @@ Disable a capability on a bundle ID by deleting the bundleIdCapabilities resourc
 | `capability_id` | string | **yes** | The bundleIdCapabilities resource ID to delete. |
 
 ### `list_certificates`
+
+🟢 **Read-only** — safe to call without confirmation.
 
 List signing certificates.
 
@@ -644,6 +759,8 @@ List signing certificates.
 
 ### `create_certificate`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Create a signing certificate from a CSR (certificate type + PEM CSR content).
 
 | Parameter | Type | Required | Description |
@@ -653,6 +770,8 @@ Create a signing certificate from a CSR (certificate type + PEM CSR content).
 
 ### `list_devices`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List registered devices.
 
 | Parameter | Type | Required | Description |
@@ -661,6 +780,8 @@ List registered devices.
 | `limit` | integer | no | Page size (max 200). |
 
 ### `register_device`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Register a device for development/ad-hoc distribution (name, platform, UDID).
 
@@ -672,6 +793,8 @@ Register a device for development/ad-hoc distribution (name, platform, UDID).
 
 ### `list_profiles`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List provisioning profiles.
 
 | Parameter | Type | Required | Description |
@@ -680,6 +803,8 @@ List provisioning profiles.
 | `limit` | integer | no | Page size (max 200). |
 
 ### `create_profile`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create a provisioning profile (name, type, bundle ID, certificate IDs, and device IDs for development/ad-hoc profiles).
 
@@ -697,6 +822,8 @@ Screenshot/preview sets and uploads (reserve -> upload -> commit).
 
 ### `upload_app_screenshot`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Upload an app screenshot into an appScreenshotSet (reserve → upload → commit with MD5 verification). Provide the set ID and a local image path.
 
 | Parameter | Type | Required | Description |
@@ -705,6 +832,8 @@ Upload an app screenshot into an appScreenshotSet (reserve → upload → commit
 | `screenshot_set_id` | string | **yes** | The appScreenshotSet ID to add this screenshot to. |
 
 ### `upload_app_preview`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Upload an app preview video into an appPreviewSet (reserve → upload → commit with MD5 verification). Provide the set ID and a local video path.
 
@@ -715,6 +844,8 @@ Upload an app preview video into an appPreviewSet (reserve → upload → commit
 
 ### `create_screenshot_set`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Create an appScreenshotSet for a version localization + display type (e.g. APP_IPHONE_67). Upload screenshots into it with upload_app_screenshot.
 
 | Parameter | Type | Required | Description |
@@ -723,6 +854,8 @@ Create an appScreenshotSet for a version localization + display type (e.g. APP_I
 | `version_localization_id` | string | **yes** | The appStoreVersionLocalization ID this set belongs to. |
 
 ### `create_preview_set`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create an appPreviewSet for a version localization + preview type (e.g. IPHONE_67). Upload previews into it with upload_app_preview.
 
@@ -733,6 +866,8 @@ Create an appPreviewSet for a version localization + preview type (e.g. IPHONE_6
 
 ### `delete_screenshot_set`
 
+🔴 **Destructive** — removes or invalidates something.
+
 Delete an appScreenshotSet (and its screenshots) by ID.
 
 | Parameter | Type | Required | Description |
@@ -741,6 +876,8 @@ Delete an appScreenshotSet (and its screenshots) by ID.
 
 ### `delete_preview_set`
 
+🔴 **Destructive** — removes or invalidates something.
+
 Delete an appPreviewSet (and its previews) by ID.
 
 | Parameter | Type | Required | Description |
@@ -748,6 +885,8 @@ Delete an appPreviewSet (and its previews) by ID.
 | `set_id` | string | **yes** | The set ID to delete. |
 
 ### `reorder_screenshots`
+
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
 
 Set the display order of screenshots within an appScreenshotSet by passing the screenshot IDs in the desired order.
 
@@ -761,6 +900,8 @@ Set the display order of screenshots within an appScreenshotSet by passing the s
 Introductory, promotional, and win-back offers.
 
 ### `create_introductory_offer`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create a subscription introductory offer (free trial / pay-as-you-go / pay-up-front). For paid modes supply price_point_id + territory; for FREE_TRIAL omit them.
 
@@ -777,6 +918,8 @@ Create a subscription introductory offer (free trial / pay-as-you-go / pay-up-fr
 
 ### `create_promotional_offer`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Create a subscription promotional offer with a code and one price per territory. Look up price-point IDs with list_subscription_price_points.
 
 | Parameter | Type | Required | Description |
@@ -790,6 +933,8 @@ Create a subscription promotional offer with a code and one price per territory.
 | `subscription_id` | string | **yes** | The subscription ID. |
 
 ### `create_winback_offer`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create a win-back offer to re-acquire churned subscribers (iOS 18+): eligibility windows, priority, and one price per territory.
 
@@ -813,6 +958,8 @@ Create a win-back offer to re-acquire churned subscribers (iOS 18+): eligibility
 
 ### `list_winback_offers`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List the win-back offers configured for a subscription.
 
 | Parameter | Type | Required | Description |
@@ -825,6 +972,8 @@ List the win-back offers configured for a subscription.
 Offer-code campaigns plus one-time-use and custom codes.
 
 ### `create_offer_code`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create a subscription offer-code campaign (eligibility, duration, mode, and one price per territory). Then generate codes with generate_one_time_use_codes or create_custom_offer_code.
 
@@ -841,6 +990,8 @@ Create a subscription offer-code campaign (eligibility, duration, mode, and one 
 
 ### `generate_one_time_use_codes`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Generate a batch of one-time-use codes for an offer-code campaign. The response includes a values URL to download the codes.
 
 | Parameter | Type | Required | Description |
@@ -852,6 +1003,8 @@ Generate a batch of one-time-use codes for an offer-code campaign. The response 
 
 ### `create_custom_offer_code`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Create a custom (vanity) offer code for an offer-code campaign.
 
 | Parameter | Type | Required | Description |
@@ -862,6 +1015,8 @@ Create a custom (vanity) offer code for an offer-code campaign.
 | `expiration_date` | string | no | Optional expiration date (YYYY-MM-DD). |
 
 ### `list_offer_codes`
+
+🟢 **Read-only** — safe to call without confirmation.
 
 List the offer-code campaigns configured for a subscription.
 
@@ -876,6 +1031,8 @@ Promote IAPs/subscriptions on the product page.
 
 ### `create_promoted_purchase`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Create a promoted purchase for an app, referencing either an in-app purchase or a subscription. visible_for_all_users is required.
 
 | Parameter | Type | Required | Description |
@@ -888,6 +1045,8 @@ Create a promoted purchase for an app, referencing either an in-app purchase or 
 
 ### `update_promoted_purchase`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Update a promoted purchase (visibility and/or enabled state).
 
 | Parameter | Type | Required | Description |
@@ -898,6 +1057,8 @@ Update a promoted purchase (visibility and/or enabled state).
 
 ### `set_promoted_purchase_order`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Set the order of an app's promoted purchases by passing the promotedPurchase IDs in the desired order.
 
 | Parameter | Type | Required | Description |
@@ -906,6 +1067,8 @@ Set the order of an app's promoted purchases by passing the promotedPurchase IDs
 | `ordered_promoted_purchase_ids` | array of string | **yes** | The promotedPurchase IDs in the desired display order. |
 
 ### `list_promoted_purchases`
+
+🟢 **Read-only** — safe to call without confirmation.
 
 List an app's promoted purchases (in display order).
 
@@ -920,6 +1083,8 @@ Read reviews and post/delete developer responses.
 
 ### `list_customer_reviews`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List an app's customer reviews, optionally filtered by rating/territory and sorted (e.g. -createdDate). Set include_response=true to see existing responses.
 
 | Parameter | Type | Required | Description |
@@ -933,6 +1098,8 @@ List an app's customer reviews, optionally filtered by rating/territory and sort
 
 ### `respond_to_review`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Post a developer response to a customer review. A review can have only one response; to change it, delete the existing one with delete_review_response first.
 
 | Parameter | Type | Required | Description |
@@ -941,6 +1108,8 @@ Post a developer response to a customer review. A review can have only one respo
 | `review_id` | string | **yes** | The customerReview ID (from list_customer_reviews). |
 
 ### `delete_review_response`
+
+🔴 **Destructive** — removes or invalidates something.
 
 Delete a developer response to a customer review by response ID.
 
@@ -954,6 +1123,8 @@ Staged 7-day rollout control.
 
 ### `start_phased_release`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Start a phased (7-day staged) release for an App Store version. Optionally set the initial state (defaults to ACTIVE).
 
 | Parameter | Type | Required | Description |
@@ -962,6 +1133,8 @@ Start a phased (7-day staged) release for an App Store version. Optionally set t
 | `state` | object | no | Optional initial state (defaults to ACTIVE). |
 
 ### `update_phased_release`
+
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
 
 Update a phased release: PAUSED to pause, ACTIVE to resume, COMPLETE to release to all users immediately.
 
@@ -976,6 +1149,8 @@ Team users and invitations.
 
 ### `list_users`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List all users on the App Store Connect team. Optionally pass include=visibleApps to include the apps each user can access.
 
 | Parameter | Type | Required | Description |
@@ -984,6 +1159,8 @@ List all users on the App Store Connect team. Optionally pass include=visibleApp
 | `limit` | integer | no | Page size (max 200). |
 
 ### `invite_user`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Invite a new user to the App Store Connect team. Provide email, first_name, last_name, and one or more roles (e.g. DEVELOPER, ADMIN). Optionally set all_apps_visible or supply a list of visible_app_ids.
 
@@ -999,6 +1176,8 @@ Invite a new user to the App Store Connect team. Provide email, first_name, last
 
 ### `update_user`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Update a team user's roles, app-visibility flag, provisioning permission, or visible apps. Only fields that are provided are sent to the API.
 
 | Parameter | Type | Required | Description |
@@ -1010,6 +1189,8 @@ Update a team user's roles, app-visibility flag, provisioning permission, or vis
 | `visible_app_ids` | array of string | no | App IDs the user should have access to. Replaces the existing list. Only sent when provided and non-empty. |
 
 ### `remove_user`
+
+🔴 **Destructive** — removes or invalidates something.
 
 Remove a user from the App Store Connect team by their user ID.
 
@@ -1023,6 +1204,8 @@ App Store in-app events, localizations, and media.
 
 ### `create_app_event`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Create an in-app event for an app. Provide a reference_name (internal, not shown to customers) and optionally a badge (LIVE_EVENT, PREMIERE, CHALLENGE, COMPETITION, NEW_SEASON, MAJOR_UPDATE, SPECIAL_EVENT) and primary_locale (BCP-47, e.g. en-US). After creating, add localizations with create_app_event_localization and screenshots with upload_app_event_screenshot.
 
 | Parameter | Type | Required | Description |
@@ -1033,6 +1216,8 @@ Create an in-app event for an app. Provide a reference_name (internal, not shown
 | `primary_locale` | string | no | Optional BCP-47 primary locale for the event, e.g. "en-US". |
 
 ### `create_app_event_localization`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Add a localized name and description to an in-app event for a given locale (e.g. en-US). Provide the app_event_id, locale, name, and short_description; long_description is optional.
 
@@ -1045,6 +1230,8 @@ Add a localized name and description to an in-app event for a given locale (e.g.
 | `long_description` | string | no | Optional long description shown to customers. |
 
 ### `upload_app_event_screenshot`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Upload a screenshot for an in-app event localization (reserve → upload → commit with MD5 verification). Provide the app_event_localization_id, app_event_asset_type (EVENT_CARD or EVENT_DETAILS_PAGE), and a local image file_path.
 
@@ -1060,6 +1247,8 @@ Inspect and trigger Xcode Cloud (CI) builds.
 
 ### `list_ci_products`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List all Xcode Cloud products (CI-enabled apps and frameworks) in the team. Each product corresponds to an app or framework that has been set up for Xcode Cloud.
 
 | Parameter | Type | Required | Description |
@@ -1067,6 +1256,8 @@ List all Xcode Cloud products (CI-enabled apps and frameworks) in the team. Each
 | `limit` | integer | no | Page size (max 200). |
 
 ### `list_ci_workflows`
+
+🟢 **Read-only** — safe to call without confirmation.
 
 List all CI workflows for a given Xcode Cloud product. Use list_ci_products to obtain the ci_product_id.
 
@@ -1077,6 +1268,8 @@ List all CI workflows for a given Xcode Cloud product. Use list_ci_products to o
 
 ### `start_ci_build`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Start a new Xcode Cloud build run for a workflow on a specific branch or tag. Provide the workflow_id (from list_ci_workflows) and source_branch_or_tag_id, which is a scmGitReference resource ID. Obtain it by listing the workflow's repository git references with: appstore_list { "path": "/v1/ciWorkflows/{workflow_id}/repository/gitReferences" }.
 
 | Parameter | Type | Required | Description |
@@ -1085,6 +1278,8 @@ Start a new Xcode Cloud build run for a workflow on a specific branch or tag. Pr
 | `workflow_id` | string | **yes** | The Xcode Cloud workflow ID. |
 
 ### `get_ci_build_run`
+
+🟢 **Read-only** — safe to call without confirmation.
 
 Get the details of a specific Xcode Cloud build run by its ID. Optionally pass include (e.g. "builds,workflows") to embed related resources.
 
@@ -1095,6 +1290,8 @@ Get the details of a specific Xcode Cloud build run by its ID. Optionally pass i
 
 ### `list_ci_build_actions`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List all CI build actions (e.g. analyze, archive, test, lint) for a given Xcode Cloud build run. Use get_ci_build_run or start_ci_build to obtain the build_run_id.
 
 | Parameter | Type | Required | Description |
@@ -1104,9 +1301,11 @@ List all CI build actions (e.g. analyze, archive, test, lint) for a given Xcode 
 
 ## Analytics reports
 
-Request and read App Store analytics reports.
+Request, navigate, and download App Store analytics reports.
 
 ### `request_analytics_report`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create an analytics report request for an app. Use access_type ONGOING for a recurring report or ONE_TIME_SNAPSHOT for a one-time snapshot. Returns the report request resource including its ID, which you then pass to list_analytics_reports.
 
@@ -1117,6 +1316,8 @@ Create an analytics report request for an app. Use access_type ONGOING for a rec
 
 ### `list_analytics_reports`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List the analytics reports available for a report request. Optionally filter by category (e.g. APP_USAGE, COMMERCE, ENGAGEMENT, FRAMEWORK_USAGE, PERFORMANCE). Returns report resources whose IDs you pass to list_analytics_report_instances.
 
 | Parameter | Type | Required | Description |
@@ -1126,6 +1327,8 @@ List the analytics reports available for a report request. Optionally filter by 
 | `limit` | integer | no | Page size (max 200). |
 
 ### `list_analytics_report_instances`
+
+🟢 **Read-only** — safe to call without confirmation.
 
 List instances of an analytics report, optionally filtered by granularity (DAILY, WEEKLY, or MONTHLY) and/or processing date (YYYY-MM-DD). Returns instance resources whose IDs you pass to list_analytics_report_segments.
 
@@ -1138,18 +1341,33 @@ List instances of an analytics report, optionally filtered by granularity (DAILY
 
 ### `list_analytics_report_segments`
 
-List the downloadable segments for an analytics report instance. Each segment's attributes include a presigned `url` pointing to a gzipped CSV file, plus `sizeInBytes` and `checksum` — this tool surfaces those download URLs rather than downloading the data itself.
+🟢 **Read-only** — safe to call without confirmation.
+
+List the downloadable segments for an analytics report instance. Each segment's attributes include a presigned `url` pointing to a gzipped delimited file, plus `sizeInBytes` and `checksum`. Pass that `url` to download_analytics_segment to read the rows.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `instance_id` | string | **yes** | The analytics report instance ID. |
 | `limit` | integer | no | Page size (max 200). |
 
+### `download_analytics_segment`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+Download an analytics report segment and return its contents as JSON rows. Takes the presigned `url` from a segment returned by list_analytics_report_segments, decompresses the gzipped file, and parses it into rows keyed by column name. Returns the column list, the total row count, and up to `max_rows` rows (default 100). This is how you read the actual analytics numbers — the other analytics tools only navigate to the segment.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `url` | string | **yes** | The segment's presigned download URL, taken from a segment's `attributes.url` in list_analytics_report_segments. These URLs expire, so fetch a fresh one if the download is rejected. |
+| `max_rows` | integer | no | Maximum data rows to return (default 100, hard maximum 5000). The full row count is reported regardless of how many rows come back. |
+
 ## Custom product pages
 
 Marketing product-page variants: pages, versions, localized text, and image sets.
 
 ### `list_custom_product_pages`
+
+🟢 **Read-only** — safe to call without confirmation.
 
 List an app's custom product pages (CPP).
 
@@ -1161,6 +1379,8 @@ List an app's custom product pages (CPP).
 
 ### `get_custom_product_page`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 Get a custom product page by ID, with optional includes.
 
 | Parameter | Type | Required | Description |
@@ -1169,6 +1389,8 @@ Get a custom product page by ID, with optional includes.
 | `include` | string | no | Comma-separated includes, e.g. "appCustomProductPageVersions". |
 
 ### `create_custom_product_page`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create a custom product page for an app. Apple creates it together with an initial version and a localization for `locale` (with optional promotional text), so the page is ready for screenshot/preview sets. Add further versions/localizations with create_custom_product_page_version / create_custom_product_page_localization.
 
@@ -1181,6 +1403,8 @@ Create a custom product page for an app. Apple creates it together with an initi
 
 ### `update_custom_product_page`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Update a custom product page's name and/or visibility.
 
 | Parameter | Type | Required | Description |
@@ -1191,6 +1415,8 @@ Update a custom product page's name and/or visibility.
 
 ### `delete_custom_product_page`
 
+🔴 **Destructive** — removes or invalidates something.
+
 Delete a custom product page by ID.
 
 | Parameter | Type | Required | Description |
@@ -1198,6 +1424,8 @@ Delete a custom product page by ID.
 | `page_id` | string | **yes** | The appCustomProductPage ID. |
 
 ### `list_custom_product_page_versions`
+
+🟢 **Read-only** — safe to call without confirmation.
 
 List a custom product page's versions.
 
@@ -1208,6 +1436,8 @@ List a custom product page's versions.
 
 ### `create_custom_product_page_version`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Create a new version of a custom product page (optionally with a deep link). A new version is the editable draft you add localizations and images to.
 
 | Parameter | Type | Required | Description |
@@ -1217,6 +1447,8 @@ Create a new version of a custom product page (optionally with a deep link). A n
 
 ### `list_custom_product_page_localizations`
 
+🟢 **Read-only** — safe to call without confirmation.
+
 List a custom product page version's localizations.
 
 | Parameter | Type | Required | Description |
@@ -1225,6 +1457,8 @@ List a custom product page version's localizations.
 | `limit` | integer | no | Page size (max 200). |
 
 ### `create_custom_product_page_localization`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Add a localized promotional text to a custom product page version for a given locale. Create screenshot/preview sets against the returned localization ID.
 
@@ -1236,6 +1470,8 @@ Add a localized promotional text to a custom product page version for a given lo
 
 ### `update_custom_product_page_localization`
 
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
 Update a custom product page localization's promotional text.
 
 | Parameter | Type | Required | Description |
@@ -1245,6 +1481,8 @@ Update a custom product page localization's promotional text.
 
 ### `create_cpp_screenshot_set`
 
+🟡 **Writes** — creates something new; calling it twice creates two.
+
 Create an appScreenshotSet on a custom product page localization (e.g. display type APP_IPHONE_67). Upload images into it with upload_app_screenshot.
 
 | Parameter | Type | Required | Description |
@@ -1253,6 +1491,8 @@ Create an appScreenshotSet on a custom product page localization (e.g. display t
 | `screenshot_display_type` | string | **yes** | Display type, e.g. "APP_IPHONE_67", "APP_IPAD_PRO_129". |
 
 ### `create_cpp_preview_set`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
 
 Create an appPreviewSet on a custom product page localization (e.g. preview type IPHONE_67). Upload videos into it with upload_app_preview.
 

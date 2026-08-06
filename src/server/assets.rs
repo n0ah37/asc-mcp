@@ -87,7 +87,7 @@ with MD5 verification). Provide the set ID and a local image path."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Upload an app preview into a preview set.
@@ -115,7 +115,7 @@ with MD5 verification). Provide the set ID and a local video path."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a screenshot set for a version localization.
@@ -134,7 +134,7 @@ APP_IPHONE_67). Upload screenshots into it with upload_app_screenshot."
             .post("/v1/appScreenshotSets", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a preview set for a version localization.
@@ -152,7 +152,7 @@ IPHONE_67). Upload previews into it with upload_app_preview."
             .post("/v1/appPreviewSets", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Delete a screenshot set.
@@ -165,7 +165,7 @@ IPHONE_67). Upload previews into it with upload_app_preview."
             .delete(&format!("/v1/appScreenshotSets/{}", args.set_id))
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(json!({ "deleted": args.set_id }))
+        self.ok_json(json!({ "deleted": args.set_id }))
     }
 
     /// Delete a preview set.
@@ -178,7 +178,7 @@ IPHONE_67). Upload previews into it with upload_app_preview."
             .delete(&format!("/v1/appPreviewSets/{}", args.set_id))
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(json!({ "deleted": args.set_id }))
+        self.ok_json(json!({ "deleted": args.set_id }))
     }
 
     /// Reorder the screenshots within a set.
@@ -199,7 +199,7 @@ the screenshot IDs in the desired order."
             .patch(&path, body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(json!({ "reordered": args.ordered_screenshot_ids }))
+        self.ok_json(json!({ "reordered": args.ordered_screenshot_ids }))
     }
 }
 

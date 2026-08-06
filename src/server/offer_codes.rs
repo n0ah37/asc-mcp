@@ -138,7 +138,7 @@ create_custom_offer_code."
             .post("/v1/subscriptionOfferCodes", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Generate a batch of one-time-use offer codes.
@@ -156,7 +156,7 @@ response includes a values URL to download the codes."
             .post("/v1/subscriptionOfferCodeOneTimeUseCodes", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create a custom (vanity) offer code.
@@ -171,7 +171,7 @@ response includes a values URL to download the codes."
             .post("/v1/subscriptionOfferCodeCustomCodes", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List a subscription's offer codes.
@@ -190,7 +190,7 @@ response includes a values URL to download the codes."
             )
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 }
 

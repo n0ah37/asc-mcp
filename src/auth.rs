@@ -107,23 +107,8 @@ fn unix_now() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::{pem, TEST_ISSUER, TEST_KEY_ID, TEST_PRIVATE_BODY, TEST_PUBLIC_BODY};
     use jsonwebtoken::{decode, DecodingKey, Validation};
-
-    // A throwaway P-256 keypair for round-tripping (generated offline; test-only,
-    // grants access to nothing). Only the base64 DER bodies are stored here — the
-    // PEM is assembled at runtime by `pem()` so the literal key markers never
-    // appear in source and can't trip secret scanners on a public repo.
-    const TEST_PRIVATE_BODY: &str = "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgtNQuT3hctsLS5iks\nldU7lAHLp9QPbYtRkNrhPNxlreOhRANCAATtwWcC7S4Iv3kFf5CZ+S00uBy6z0Ai\nkKhZsS1aG3tDlcxyWKPycElp3WMMtbnrPLa6ZaRHAwEY2M5jfPbUvS7O";
-    const TEST_PUBLIC_BODY: &str = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7cFnAu0uCL95BX+QmfktNLgcus9A\nIpCoWbEtWht7Q5XMclij8nBJad1jDLW56zy2umWkRwMBGNjOY3z21L0uzg==";
-
-    const TEST_ISSUER: &str = "57246542-96fe-1a63-e053-0824d011072a";
-    const TEST_KEY_ID: &str = "ABC123DEFG";
-
-    /// Assemble a PEM document from a label and base64 body at runtime.
-    fn pem(label: &str, body: &str) -> String {
-        let rule = "-----";
-        format!("{rule}BEGIN {label}{rule}\n{body}\n{rule}END {label}{rule}\n")
-    }
 
     #[tokio::test]
     async fn signs_and_verifies_a_valid_token() {

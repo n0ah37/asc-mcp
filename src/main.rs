@@ -3,14 +3,8 @@
 //! Communicates over stdio (JSON-RPC). All diagnostic logging goes to **stderr**;
 //! stdout is reserved for the MCP protocol.
 
-mod auth;
-mod client;
-mod config;
-mod error;
-mod server;
-mod upload;
-
 use anyhow::Context;
+use appstore_mcp::{config, server};
 use rmcp::{transport::stdio, ServiceExt};
 use tracing_subscriber::EnvFilter;
 

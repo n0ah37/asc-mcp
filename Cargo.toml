@@ -1,8 +1,11 @@
 [package]
 name = "appstore-mcp"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "MCP server exposing the Apple App Store Connect API (101 tools)"
+# Verified against the locked dependency graph, not assumed: `darling` and
+# `time` are the binding constraint. The `msrv` CI job builds on exactly this.
+rust-version = "1.88"
+description = "MCP server exposing the Apple App Store Connect API (114 tools)"
 license = "MIT"
 repository = "https://github.com/forgeopslabs/appstore-mcp"
 homepage = "https://github.com/forgeopslabs/appstore-mcp"
@@ -17,7 +20,15 @@ lto = "thin"
 
 [dependencies]
 rmcp = { version = "1.7", features = ["server", "transport-io", "macros"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "sync", "fs"] }
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "macros",
+    "io-std",
+    "io-util",
+    "sync",
+    "fs",
+    "time",
+] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -26,5 +37,13 @@ thiserror = "2"
 anyhow = "1"
 md-5 = "0.10"
 hex = "0.4"
+# Pure-Rust backend: the release workflow cross-compiles, and a C dependency
+# would need a working cross-toolchain on every target.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+csv = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+wiremock = "0.6"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "test-util"] }

@@ -101,7 +101,7 @@ include=visibleApps to include the apps each user can access."
             .get("/v1/users", &query)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Invite a new user to the team.
@@ -120,7 +120,7 @@ all_apps_visible or supply a list of visible_app_ids."
             .post("/v1/userInvitations", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Update a team user's roles or app visibility.
@@ -138,7 +138,7 @@ or visible apps. Only fields that are provided are sent to the API."
             .patch(&format!("/v1/users/{}", args.user_id), body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Remove a user from the team.
@@ -151,7 +151,7 @@ or visible apps. Only fields that are provided are sent to the API."
             .delete(&format!("/v1/users/{}", args.user_id))
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(json!({ "deleted": args.user_id }))
+        self.ok_json(json!({ "deleted": args.user_id }))
     }
 }
 

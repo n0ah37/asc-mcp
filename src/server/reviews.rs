@@ -68,7 +68,7 @@ sorted (e.g. -createdDate). Set include_response=true to see existing responses.
             .get(&format!("/v1/apps/{}/customerReviews", args.app_id), &query)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Respond to a customer review.
@@ -86,7 +86,7 @@ response; to change it, delete the existing one with delete_review_response firs
             .post("/v1/customerReviewResponses", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Delete a developer response.
@@ -99,7 +99,7 @@ response; to change it, delete the existing one with delete_review_response firs
             .delete(&format!("/v1/customerReviewResponses/{}", args.response_id))
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(json!({ "deleted": args.response_id }))
+        self.ok_json(json!({ "deleted": args.response_id }))
     }
 }
 

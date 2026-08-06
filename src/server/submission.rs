@@ -151,7 +151,7 @@ with add_review_submission_item and submit with submit_review_submission."
             .post("/v1/reviewSubmissions", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Attach an item (version or event) to a review submission.
@@ -168,7 +168,7 @@ with add_review_submission_item and submit with submit_review_submission."
             .post("/v1/reviewSubmissionItems", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Submit a review submission to App Review.
@@ -187,7 +187,7 @@ metadata gates (age rating, export compliance, review details) must be satisfied
             .patch(&path, body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// List an app's review submissions.
@@ -206,7 +206,7 @@ metadata gates (age rating, export compliance, review details) must be satisfied
             .get("/v1/reviewSubmissions", &query)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Submit an in-app purchase for review.
@@ -223,7 +223,7 @@ metadata gates (age rating, export compliance, review details) must be satisfied
             .post("/v1/inAppPurchaseSubmissions", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create or update the App Review details for a version.
@@ -249,7 +249,7 @@ version. Pass review_detail_id to update an existing detail; omit it to create o
             }
         }
         .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Create an app encryption (export-compliance) declaration.
@@ -267,7 +267,7 @@ attach a build with assign_build_encryption_declaration."
             .post("/v1/appEncryptionDeclarations", body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 
     /// Assign a build to an encryption declaration.
@@ -289,7 +289,7 @@ attach a build with assign_build_encryption_declaration."
             .patch(&path, body)
             .await
             .map_err(AppStoreServer::map_err)?;
-        AppStoreServer::ok_json(value)
+        self.ok_json(value)
     }
 }
 
