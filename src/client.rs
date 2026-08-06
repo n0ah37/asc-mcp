@@ -132,13 +132,17 @@ impl AscClient {
         let mut merged = self.get(path, query).await?;
         let budget = max_pages.clamp(1, MAX_PAGES_LIMIT);
         let mut pages = 1;
+        // Built once from the first page and carried across the rest. Rebuilding
+        // it inside each merge re-hashed every resource accumulated so far, so
+        // deduping twenty pages cost O(pages²) allocations.
+        let mut seen = included_keys(&merged);
 
         while pages < budget {
             let Some(next) = next_link(&merged) else {
                 break;
             };
             let page = self.get(&next, &[]).await?;
-            merge_page(&mut merged, page);
+            merge_page(&mut merged, page, &mut seen);
             pages += 1;
         }
 
@@ -288,7 +292,10 @@ fn next_link(doc: &Value) -> Option<String> {
 /// `data` concatenates, `included` concatenates without repeating a resource
 /// already present, and `links` is replaced so `next` always points at the page
 /// after the last one fetched.
-fn merge_page(merged: &mut Value, page: Value) {
+///
+/// `seen` carries the identities already merged; the caller owns it across the
+/// whole walk so each resource is hashed once rather than once per remaining page.
+fn merge_page(merged: &mut Value, page: Value, seen: &mut HashSet<String>) {
     let Value::Object(mut page) = page else {
         return;
     };
@@ -303,11 +310,6 @@ fn merge_page(merged: &mut Value, page: Value) {
     }
 
     if let Some(Value::Array(from)) = page.get_mut("included") {
-        let mut seen: HashSet<(String, String)> = target
-            .get("included")
-            .and_then(Value::as_array)
-            .map(|items| items.iter().filter_map(identity).collect())
-            .unwrap_or_default();
         let into = target
             .entry("included")
             .or_insert_with(|| Value::Array(Vec::new()));
@@ -333,12 +335,26 @@ fn merge_page(merged: &mut Value, page: Value) {
     }
 }
 
-/// The `(type, id)` pair identifying a JSON:API resource.
-fn identity(item: &Value) -> Option<(String, String)> {
-    Some((
-        item.get("type")?.as_str()?.to_string(),
-        item.get("id")?.as_str()?.to_string(),
-    ))
+/// The `type`/`id` identity of a JSON:API resource, as a single allocation.
+///
+/// Joined with a NUL, which cannot appear in either field, so the combined form
+/// is unambiguous — and one string per resource beats a tuple of two.
+fn identity(item: &Value) -> Option<String> {
+    let resource_type = item.get("type")?.as_str()?;
+    let id = item.get("id")?.as_str()?;
+    let mut key = String::with_capacity(resource_type.len() + 1 + id.len());
+    key.push_str(resource_type);
+    key.push('\0');
+    key.push_str(id);
+    Some(key)
+}
+
+/// Every resource identity already present in a document's `included`.
+fn included_keys(doc: &Value) -> HashSet<String> {
+    doc.get("included")
+        .and_then(Value::as_array)
+        .map(|items| items.iter().filter_map(identity).collect())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -367,10 +383,17 @@ mod tests {
         assert_eq!(next_link(&json!({ "data": [] })), None);
     }
 
+    /// Merge one page the way [`AscClient::get_paged`] does: seeding the seen-set
+    /// from the accumulated document first.
+    fn merge_one(merged: &mut Value, page: Value) {
+        let mut seen = included_keys(merged);
+        merge_page(merged, page, &mut seen);
+    }
+
     #[test]
     fn merge_page_concatenates_data_and_advances_links() {
         let mut merged = page(&["1", "2"], Some("https://x/page2"));
-        merge_page(&mut merged, page(&["3"], Some("https://x/page3")));
+        merge_one(&mut merged, page(&["3"], Some("https://x/page3")));
         let ids: Vec<&str> = merged["data"]
             .as_array()
             .unwrap()
@@ -384,8 +407,44 @@ mod tests {
     #[test]
     fn merge_page_clears_next_on_the_final_page() {
         let mut merged = page(&["1"], Some("https://x/page2"));
-        merge_page(&mut merged, page(&["2"], None));
+        merge_one(&mut merged, page(&["2"], None));
         assert!(next_link(&merged).is_none(), "stale next link kept");
+    }
+
+    #[test]
+    fn identity_cannot_confuse_two_different_resources() {
+        // A naive concatenation would make ("ab", "c") and ("a", "bc") collide.
+        let a = identity(&json!({ "type": "ab", "id": "c" }));
+        let b = identity(&json!({ "type": "a", "id": "bc" }));
+        assert!(a.is_some() && b.is_some());
+        assert_ne!(a, b);
+        assert_eq!(identity(&json!({ "type": "builds" })), None);
+        assert_eq!(identity(&json!({ "id": "b1" })), None);
+    }
+
+    #[test]
+    fn the_seen_set_carries_across_every_page_not_just_the_last() {
+        // The set is built once in `get_paged` and threaded through, so a
+        // resource first seen on page 1 must still be recognised on page 3.
+        let mut merged = json!({ "data": [], "included": [{ "type": "builds", "id": "b1" }] });
+        let mut seen = included_keys(&merged);
+        merge_page(
+            &mut merged,
+            json!({ "data": [], "included": [{ "type": "builds", "id": "b2" }] }),
+            &mut seen,
+        );
+        merge_page(
+            &mut merged,
+            json!({ "data": [], "included": [{ "type": "builds", "id": "b1" }] }),
+            &mut seen,
+        );
+        let ids: Vec<&str> = merged["included"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, ["b1", "b2"], "page 1's resource reappeared on page 3");
     }
 
     #[test]
@@ -393,7 +452,7 @@ mod tests {
         let mut merged = json!({
             "data": [], "included": [{ "type": "builds", "id": "b1" }]
         });
-        merge_page(
+        merge_one(
             &mut merged,
             json!({
                 "data": [],
@@ -708,6 +767,51 @@ mod tests {
             assert_eq!(merged["data"].as_array().unwrap().len(), 3);
             assert_eq!(merged["meta"]["pagesFetched"], 2);
             assert_eq!(merged["meta"]["hasMore"], false);
+        }
+
+        #[tokio::test]
+        async fn paging_deduplicates_included_resources_across_pages() {
+            // Pages routinely share sideloaded resources — the same app included
+            // by every one of its builds. Returning it once per page would waste
+            // most of the merged document on repeats.
+            let server = MockServer::start().await;
+            let next = format!("{}/v1/builds?cursor=P2", server.uri());
+            Mock::given(method("GET"))
+                .and(query_param("cursor", "P2"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "data": [{ "type": "builds", "id": "b2" }],
+                    "included": [
+                        { "type": "apps", "id": "a1" },
+                        { "type": "apps", "id": "a2" }
+                    ],
+                    "links": {}
+                })))
+                .with_priority(1)
+                .mount(&server)
+                .await;
+            Mock::given(method("GET"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "data": [{ "type": "builds", "id": "b1" }],
+                    "included": [{ "type": "apps", "id": "a1" }],
+                    "links": { "next": next }
+                })))
+                .with_priority(2)
+                .mount(&server)
+                .await;
+
+            let merged = test_client(&server.uri())
+                .get_paged("/v1/builds", &[], 5)
+                .await
+                .unwrap();
+
+            let included: Vec<&str> = merged["included"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["id"].as_str().unwrap())
+                .collect();
+            assert_eq!(included, ["a1", "a2"], "a1 came back twice");
+            assert_eq!(merged["data"].as_array().unwrap().len(), 2);
         }
 
         #[tokio::test]

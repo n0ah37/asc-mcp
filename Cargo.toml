@@ -1,6 +1,6 @@
 [package]
 name = "appstore-mcp"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 # Verified against the locked dependency graph, not assumed: `darling` and
 # `time` are the binding constraint. The `msrv` CI job builds on exactly this.
@@ -16,8 +16,16 @@ categories = ["command-line-utilities", "api-bindings", "development-tools"]
 
 [profile.release]
 strip = true
-lto = "thin"
-
+# Whole-program LTO in a single codegen unit: 8.15 MB -> 6.05 MB (-25.8%). It
+# costs ~42s on a full release build, which only ever runs in the release
+# workflow (and in parallel across the three platforms), while the binary ships
+# three times over inside every .mcpb bundle. Debug and test builds are
+# untouched, so day-to-day compile times don't change.
+lto = "fat"
+codegen-units = 1
+# Deliberately NOT `panic = "abort"`: it would shrink the binary further, but a
+# panic in one tool handler would take the whole server down instead of failing
+# that single call, and an MCP client on stdio would lose its session.
 [dependencies]
 rmcp = { version = "1.7", features = ["server", "transport-io", "macros"] }
 tokio = { version = "1", features = [
