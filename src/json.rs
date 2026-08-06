@@ -97,8 +97,9 @@ pub fn cap(value: Value, max_bytes: usize) -> Value {
     note.insert(
         "hint".into(),
         json!(
-            "Narrow the result with `limit`, a `filter[...]`, or `fields[...]` sparse fieldsets, \
-or page through it with `cursor`."
+            "Re-request with a smaller `limit`, a narrower `filter[...]`, or `fields[...]` sparse \
+fieldsets. Do NOT follow `links.next` to recover the dropped items — it points past this whole \
+page, so they would be skipped."
         ),
     );
 
@@ -294,10 +295,12 @@ mod tests {
         assert!((1..200).contains(&kept), "kept {kept} of 200");
         assert_eq!(out["_truncated"]["dataItemsReturned"], kept);
         assert_eq!(out["_truncated"]["dataItemsAvailable"], 200);
+        // `links.next` points past this whole page, so following it after a trim
+        // silently skips the dropped items. The note has to say so.
         assert!(out["_truncated"]["hint"]
             .as_str()
             .unwrap()
-            .contains("cursor"));
+            .contains("Do NOT follow `links.next`"));
     }
 
     #[test]
