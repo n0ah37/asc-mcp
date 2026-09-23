@@ -14,6 +14,11 @@ All notable changes to `appstore-mcp`. This project follows
   enabled; inspect the target tool's annotations before approving writes.
 - Repository contributor guidance in `AGENTS.md`.
 
+### Security
+
+- Updated locked `h2` and `rustls` versions to include fixes for
+  RUSTSEC-2026-0258 and RUSTSEC-2026-0285.
+
 ## [0.3.1] — 2026-08-06
 
 The two minor items left over from 0.3.0's profiling. Internal only — no tool,
