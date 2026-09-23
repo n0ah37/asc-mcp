@@ -148,11 +148,13 @@ one flat list can't tell a read from a delete. Two knobs fix that:
 |----------|---------|-------------|
 | `ASC_TOOLS` | all | Comma-separated tool groups to serve, or the preset `core`. |
 | `ASC_READ_ONLY` | `0` | Serve only tools that cannot modify the account. |
+| `ASC_TOOL_DISCOVERY` | `0` | Expose only `search_tools`, `get_tool_details`, and `call_discovered_tool`; filtered domain tools stay available through discovery. |
 
 ```bash
 ASC_TOOLS=core                     # 41 tools: generic, apps, versions, assets, testflight, submission
 ASC_TOOLS=testflight,provisioning  # just what a build-distribution agent needs
 ASC_READ_ONLY=1                    # 35 read-only tools; writes are withheld entirely
+ASC_TOOL_DISCOVERY=1               # 3 visible tools; discover domain tools on demand
 ```
 
 Groups: `generic`, `apps`, `iap`, `subscriptions`, `versions`, `pricing`,
@@ -171,6 +173,17 @@ Every served tool advertises MCP annotations (`readOnlyHint`, `destructiveHint`,
 are marked destructive: the seven `delete_*`/`remove_*` tools, `expire_build`,
 `disable_bundle_id_capability`, and `appstore_request` (which can reach any
 `DELETE` endpoint).
+
+**Discovery mode.** Search by task, inspect a matching tool's full input schema
+and safety annotations, then pass its exact name and arguments to
+`call_discovered_tool`. `ASC_TOOLS` and `ASC_READ_ONLY` filter the private
+catalog before search or execution. Direct calls to hidden tool names fail.
+This is server-side discovery: inspected schemas appear in tool results, not as
+new first-class MCP tools injected by the host.
+The generic execution tool is marked destructive whenever writes are enabled;
+hosts cannot apply distinct approval rules to each hidden tool. Inspect the
+underlying tool and approve writes before calling it. Default mode preserves
+the existing individually annotated tool surface.
 
 ## Tuning
 

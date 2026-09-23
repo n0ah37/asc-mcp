@@ -12,6 +12,7 @@ mod assets;
 mod availability;
 pub mod catalog;
 mod custom_product_pages;
+mod discovery;
 mod events;
 mod generic;
 mod iap;
@@ -80,11 +81,22 @@ Limitations (enforced by Apple, not this server):
   can pre-create its bundle ID with create_bundle_id.
 - Sales/finance reports return gzipped TSV, not JSON:API, and are not wrapped here.";
 
+const DISCOVERY_INSTRUCTIONS: &str = "\
+This server wraps the Apple App Store Connect API in discovery mode. Use \
+search_tools to find operations, get_tool_details to inspect an operation's \
+input schema and safety annotations, then call_discovered_tool with its exact \
+name and arguments. call_discovered_tool can write or delete account data; \
+check the inspected annotations and obtain approval before writes. \
+ASC_TOOLS and ASC_READ_ONLY still restrict which operations are available. \
+Credentials come from ASC_ISSUER_ID, ASC_KEY_ID, and ASC_PRIVATE_KEY or \
+ASC_PRIVATE_KEY_PATH. A _truncated response means narrow the request.";
+
 /// The App Store Connect MCP server.
 #[derive(Clone)]
 pub struct AppStoreServer {
     pub(crate) client: Arc<AscClient>,
     tool_router: ToolRouter<AppStoreServer>,
+    discovery_router: Option<ToolRouter<AppStoreServer>>,
 }
 
 impl AppStoreServer {
@@ -104,10 +116,20 @@ impl AppStoreServer {
                  they are served without safety annotations; classify them there"
             );
         }
+        let domain_tool_count = assembled.router.map.len();
+        let (tool_router, discovery_router) = if tools.discovery {
+            let mut visible = Self::discovery_router();
+            discovery::annotate(&mut visible, tools.read_only);
+            (visible, Some(assembled.router))
+        } else {
+            (assembled.router, None)
+        };
         tracing::info!(
-            served = assembled.router.map.len(),
+            served = tool_router.map.len(),
+            discoverable = domain_tool_count,
             withheld = assembled.withheld,
             read_only = tools.read_only,
+            discovery = tools.discovery,
             groups = assembled
                 .groups
                 .iter()
@@ -119,7 +141,8 @@ impl AppStoreServer {
 
         Self {
             client: Arc::new(AscClient::new(config)),
-            tool_router: assembled.router,
+            tool_router,
+            discovery_router,
         }
     }
 
@@ -289,7 +312,11 @@ impl ServerHandler for AppStoreServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::from_build_env())
-            .with_instructions(INSTRUCTIONS.to_string())
+            .with_instructions(if self.discovery_router.is_some() {
+                DISCOVERY_INSTRUCTIONS.to_string()
+            } else {
+                INSTRUCTIONS.to_string()
+            })
     }
 }
 

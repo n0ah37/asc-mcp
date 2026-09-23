@@ -133,6 +133,7 @@ fn asc_tools_serves_only_the_groups_asked_for() {
     let filtered = server_with(ToolsConfig {
         read_only: false,
         groups: Some("testflight".into()),
+        discovery: false,
     });
     let served = names(&filtered.tools());
 
@@ -154,6 +155,7 @@ fn the_core_preset_covers_shipping_an_app() {
     let core = server_with(ToolsConfig {
         read_only: false,
         groups: Some("core".into()),
+        discovery: false,
     });
     let served = names(&core.tools());
 
@@ -178,6 +180,7 @@ fn an_unrecognised_group_serves_nothing_rather_than_everything() {
     let typo = server_with(ToolsConfig {
         read_only: false,
         groups: Some("testflightt".into()),
+        discovery: false,
     });
     assert!(typo.tools().is_empty());
 }
@@ -187,6 +190,7 @@ fn read_only_mode_withholds_every_tool_that_could_write() {
     let read_only = server_with(ToolsConfig {
         read_only: true,
         groups: None,
+        discovery: false,
     });
     let tools = read_only.tools();
 
@@ -226,7 +230,46 @@ fn read_only_mode_composes_with_group_filtering() {
     let both = server_with(ToolsConfig {
         read_only: true,
         groups: Some("users".into()),
+        discovery: false,
     });
     let served = names(&both.tools());
     assert_eq!(served, vec!["list_users"]);
+}
+
+#[test]
+fn discovery_mode_exposes_only_three_conservatively_annotated_tools() {
+    let server = server_with(ToolsConfig {
+        discovery: true,
+        ..ToolsConfig::default()
+    });
+    let tools = server.tools();
+    assert!(tools.iter().all(|tool| classify(&tool.name).is_some()));
+    assert_eq!(
+        names(&tools),
+        vec!["call_discovered_tool", "get_tool_details", "search_tools"]
+    );
+    let call = &tools[0];
+    let hints = call.annotations.as_ref().unwrap();
+    assert_eq!(hints.read_only_hint, Some(false));
+    assert_eq!(hints.destructive_hint, Some(true));
+    assert_eq!(hints.idempotent_hint, Some(false));
+    for tool in &tools[1..] {
+        assert_eq!(
+            tool.annotations.as_ref().unwrap().read_only_hint,
+            Some(true)
+        );
+    }
+}
+
+#[test]
+fn discovery_mode_marks_execution_read_only_when_server_is_read_only() {
+    let server = server_with(ToolsConfig {
+        read_only: true,
+        discovery: true,
+        ..ToolsConfig::default()
+    });
+    let call = &server.tools()[0];
+    let hints = call.annotations.as_ref().unwrap();
+    assert_eq!(hints.read_only_hint, Some(true));
+    assert_eq!(hints.destructive_hint, Some(false));
 }

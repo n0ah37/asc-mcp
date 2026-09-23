@@ -1,6 +1,6 @@
 [package]
 name = "appstore-mcp"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2021"
 # Verified against the locked dependency graph, not assumed: `darling` and
 # `time` are the binding constraint. The `msrv` CI job builds on exactly this.

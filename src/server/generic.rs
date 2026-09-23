@@ -228,6 +228,7 @@ mod tests {
         let config = test_config(&mock.uri()).with_tools(ToolsConfig {
             read_only: true,
             groups: None,
+            discovery: false,
         });
         let server = AppStoreServer::new(config);
 
@@ -252,6 +253,7 @@ mod tests {
         let config = test_config(&mock.uri()).with_tools(ToolsConfig {
             read_only: true,
             groups: None,
+            discovery: false,
         });
         let result = AppStoreServer::new(config)
             .appstore_request(Parameters(request_args("get", "/v1/apps")))

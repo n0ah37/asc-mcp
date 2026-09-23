@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "appstore-mcp",
   "display_name": "App Store Connect",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Manage the Apple App Store Connect API from Claude: apps, in-app purchases, subscriptions, pricing, App Review submission, TestFlight, provisioning, analytics, and more (114 tools).",
   "long_description": "A Rust MCP server exposing the Apple App Store Connect API. Curated tools for apps & metadata, in-app purchases, subscriptions and their offers, pricing & availability, App Store versions, App Review submission, TestFlight, provisioning & signing, asset uploads, promoted purchases, customer reviews, phased release, users, in-app events, Xcode Cloud, and analytics reports (including downloading and parsing report data), plus two generic JSON:API tools that reach any other endpoint. Every tool is annotated read-only/destructive so the client knows what needs confirming, and an optional read-only mode withholds writes entirely. Authenticates with a short-lived ES256 JWT from your App Store Connect API key.",
   "author": {
@@ -30,7 +30,8 @@
         "ASC_ISSUER_ID": "${user_config.asc_issuer_id}",
         "ASC_KEY_ID": "${user_config.asc_key_id}",
         "ASC_PRIVATE_KEY_PATH": "${user_config.asc_private_key_path}",
-        "ASC_READ_ONLY": "${user_config.asc_read_only}"
+        "ASC_READ_ONLY": "${user_config.asc_read_only}",
+        "ASC_TOOL_DISCOVERY": "${user_config.asc_tool_discovery}"
       },
       "platform_overrides": {
         "win32": {
@@ -65,6 +66,13 @@
       "type": "boolean",
       "title": "Read-only mode",
       "description": "Serve only tools that cannot modify your account. Nothing can be created, changed, submitted, or deleted.",
+      "required": false,
+      "default": false
+    },
+    "asc_tool_discovery": {
+      "type": "boolean",
+      "title": "Tool discovery mode",
+      "description": "Expose search, inspect, and call tools instead of all operation schemas.",
       "required": false,
       "default": false
     }

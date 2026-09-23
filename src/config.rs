@@ -104,6 +104,9 @@ pub struct ToolsConfig {
     /// Raw `ASC_TOOLS` value (comma-separated group names, or a preset).
     /// `None` exposes every tool. Parsed by the server's tool catalog.
     pub groups: Option<String>,
+    /// Expose only discovery tools; keep filtered domain tools callable through
+    /// `call_discovered_tool` after inspection.
+    pub discovery: bool,
 }
 
 impl ToolsConfig {
@@ -111,6 +114,7 @@ impl ToolsConfig {
         Self {
             read_only: env_bool("ASC_READ_ONLY", false),
             groups: non_empty(std::env::var("ASC_TOOLS").ok()),
+            discovery: env_bool("ASC_TOOL_DISCOVERY", false),
         }
     }
 }
@@ -157,6 +161,7 @@ impl Config {
     /// - `ASC_MAX_RESPONSE_BYTES` — tool-result size cap (default 60000, `0` disables).
     /// - `ASC_TOOLS` — comma-separated tool groups to expose (default all).
     /// - `ASC_READ_ONLY` — expose only non-mutating tools.
+    /// - `ASC_TOOL_DISCOVERY` — expose three discovery tools instead of domain tools.
     pub fn from_env() -> Self {
         let issuer_id = non_empty(std::env::var("ASC_ISSUER_ID").ok());
         let key_id = non_empty(std::env::var("ASC_KEY_ID").ok());

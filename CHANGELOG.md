@@ -3,6 +3,17 @@
 All notable changes to `appstore-mcp`. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-09-23
+
+### Added
+
+- Optional `ASC_TOOL_DISCOVERY=1` mode exposes only `search_tools`,
+  `get_tool_details`, and `call_discovered_tool`. Search and execution use the
+  same `ASC_TOOLS` and `ASC_READ_ONLY` filters as the normal tool surface.
+  The generic call is conservatively annotated as destructive when writes are
+  enabled; inspect the target tool's annotations before approving writes.
+- Repository contributor guidance in `AGENTS.md`.
+
 ## [0.3.1] — 2026-08-06
 
 The two minor items left over from 0.3.0's profiling. Internal only — no tool,

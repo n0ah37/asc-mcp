@@ -199,6 +199,8 @@ pub fn classify(name: &str) -> Option<Effect> {
     match name {
         "appstore_request" => Some(Effect::MethodDependent),
         "appstore_list" => Some(Effect::Read),
+        "search_tools" => Some(Effect::Read),
+        "call_discovered_tool" => Some(Effect::MethodDependent),
         _ => VERBS
             .iter()
             .find(|(verb, _)| name.starts_with(verb))
