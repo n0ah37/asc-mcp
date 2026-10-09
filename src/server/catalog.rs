@@ -53,10 +53,11 @@ pub enum Group {
     Analytics,
     CustomProductPages,
     Market,
+    Webhooks,
 }
 
 impl Group {
-    pub const ALL: [Group; 21] = [
+    pub const ALL: [Group; 22] = [
         Group::Generic,
         Group::Apps,
         Group::Iap,
@@ -78,6 +79,7 @@ impl Group {
         Group::Analytics,
         Group::CustomProductPages,
         Group::Market,
+        Group::Webhooks,
     ];
 
     /// The everyday ship-an-app subset, for `ASC_TOOLS=core`.
@@ -113,6 +115,7 @@ impl Group {
             Group::Analytics => "analytics",
             Group::CustomProductPages => "custom-product-pages",
             Group::Market => "market",
+            Group::Webhooks => "webhooks",
         }
     }
 

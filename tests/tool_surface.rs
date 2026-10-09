@@ -5,9 +5,9 @@
 //! matters is that every tool a client sees is well-formed, honestly labelled,
 //! and that the configuration knobs really withhold what they claim to.
 
-use appstore_mcp::config::{Config, ToolsConfig};
-use appstore_mcp::server::catalog::{classify, Effect, Group};
-use appstore_mcp::server::AppStoreServer;
+use asc_mcp::config::{Config, ToolsConfig};
+use asc_mcp::server::catalog::{classify, Effect, Group};
+use asc_mcp::server::AppStoreServer;
 use rmcp::model::Tool;
 
 fn server_with(tools: ToolsConfig) -> AppStoreServer {
@@ -124,6 +124,7 @@ fn exactly_the_expected_tools_are_marked_destructive() {
             "delete_preview_set",
             "delete_review_response",
             "delete_screenshot_set",
+            "delete_webhook",
             "disable_bundle_id_capability",
             "expire_build",
             "remove_user",

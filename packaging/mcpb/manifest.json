@@ -1,16 +1,16 @@
 {
   "manifest_version": "0.3",
-  "name": "appstore-mcp",
+  "name": "asc-mcp",
   "display_name": "App Store Connect",
-  "version": "0.4.0",
-  "description": "Manage the Apple App Store Connect API from Claude: apps, in-app purchases, subscriptions, pricing, App Review submission, TestFlight, provisioning, analytics, and more (126 tools).",
+  "version": "0.5.0",
+  "description": "Manage the Apple App Store Connect API from Claude: apps, in-app purchases, subscriptions, pricing, App Review submission, TestFlight, provisioning, analytics, and more (145 tools).",
   "long_description": "A Rust MCP server exposing the Apple App Store Connect API. Curated tools for apps & metadata, in-app purchases, subscriptions and their offers, pricing & availability, App Store versions, App Review submission, TestFlight, provisioning & signing, asset uploads, promoted purchases, customer reviews, phased release, users, in-app events, Xcode Cloud, and analytics reports (including downloading and parsing report data), plus two generic JSON:API tools that reach any other endpoint. Every tool is annotated read-only/destructive so the client knows what needs confirming, and an optional read-only mode withholds writes entirely. Authenticates with a short-lived ES256 JWT from your App Store Connect API key.",
   "author": {
-    "name": "forgeopslabs",
-    "url": "https://github.com/forgeopslabs"
+    "name": "n0ah37",
+    "url": "https://github.com/n0ah37"
   },
-  "homepage": "https://github.com/forgeopslabs/appstore-mcp",
-  "documentation": "https://github.com/forgeopslabs/appstore-mcp/blob/main/docs/TOOLS.md",
+  "homepage": "https://github.com/n0ah37/asc-mcp",
+  "documentation": "https://github.com/n0ah37/asc-mcp/blob/main/docs/TOOLS.md",
   "license": "MIT",
   "keywords": [
     "app-store-connect",
@@ -22,9 +22,9 @@
   ],
   "server": {
     "type": "binary",
-    "entry_point": "server/appstore-mcp-macos",
+    "entry_point": "server/asc-mcp-macos",
     "mcp_config": {
-      "command": "server/appstore-mcp-macos",
+      "command": "server/asc-mcp-macos",
       "args": [],
       "env": {
         "ASC_ISSUER_ID": "${user_config.asc_issuer_id}",
@@ -35,10 +35,10 @@
       },
       "platform_overrides": {
         "win32": {
-          "command": "server/appstore-mcp-windows.exe"
+          "command": "server/asc-mcp-windows.exe"
         },
         "linux": {
-          "command": "server/appstore-mcp-linux"
+          "command": "server/asc-mcp-linux"
         }
       }
     }

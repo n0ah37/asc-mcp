@@ -1,0 +1,23 @@
+{
+  "name": "asc-mcp",
+  "description": "Apple App Store Connect API \u2014 145 tools (apps, in-app purchases, subscriptions & offers, pricing, App Review submission, TestFlight, provisioning, analytics, and more).",
+  "version": "0.5.0",
+  "author": {
+    "name": "n0ah37"
+  },
+  "homepage": "https://github.com/n0ah37/asc-mcp",
+  "license": "MIT",
+  "keywords": [
+    "app-store-connect",
+    "apple",
+    "ios",
+    "appstore",
+    "testflight"
+  ],
+  "mcpServers": {
+    "asc": {
+      "command": "asc-mcp",
+      "args": []
+    }
+  }
+}

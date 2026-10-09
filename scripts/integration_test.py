@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Integration test harness for appstore-mcp against the live App Store Connect API.
+"""Integration test harness for asc-mcp against the live App Store Connect API.
 
 Drives the compiled MCP server over stdio with real credentials and reports
 pass/fail per tool. Read-only by default; pass --write to also run a reversible
@@ -28,7 +28,7 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BIN = os.path.join(ROOT, "target/release/appstore-mcp")
+BIN = os.path.join(ROOT, "target/release/asc-mcp")
 
 
 def load_credentials():

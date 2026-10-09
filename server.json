@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.forgeopslabs/appstore-mcp",
+  "name": "io.github.n0ah37/asc-mcp",
   "title": "App Store Connect",
-  "description": "MCP server for the Apple App Store Connect API - 126 annotated tools, optional read-only mode.",
+  "description": "MCP server for the Apple App Store Connect API - 145 annotated tools, optional read-only mode.",
   "repository": {
-    "url": "https://github.com/forgeopslabs/appstore-mcp",
+    "url": "https://github.com/n0ah37/asc-mcp",
     "source": "github"
   },
-  "version": "0.4.0",
+  "version": "0.5.0",
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/forgeopslabs/appstore-mcp/releases/download/v0.4.0/appstore-mcp.mcpb",
+      "identifier": "https://github.com/n0ah37/asc-mcp/releases/download/v0.5.0/asc-mcp.mcpb",
       "transport": {
         "type": "stdio"
       },

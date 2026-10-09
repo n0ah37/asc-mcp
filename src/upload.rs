@@ -309,7 +309,7 @@ mod tests {
     }
 
     fn temp_file(name: &str, bytes: &[u8]) -> String {
-        let path = std::env::temp_dir().join(format!("appstore-mcp-test-{name}"));
+        let path = std::env::temp_dir().join(format!("asc-mcp-test-{name}"));
         std::fs::write(&path, bytes).expect("write temp file");
         path.to_string_lossy().into_owned()
     }

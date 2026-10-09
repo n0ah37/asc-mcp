@@ -29,6 +29,7 @@ mod subscriptions;
 mod testflight;
 mod users;
 mod versions;
+mod webhooks;
 mod xcode_cloud;
 
 use std::sync::Arc;
@@ -47,41 +48,46 @@ use catalog::Group;
 
 /// Server instructions shown to MCP clients to orient the agent.
 const INSTRUCTIONS: &str = "\
-This server wraps the Apple App Store Connect API.
+asc-mcp wraps the Apple App Store Connect API, plus public App Store data.
 
 Credentials come from the environment (ASC_ISSUER_ID, ASC_KEY_ID, and either \
-ASC_PRIVATE_KEY or ASC_PRIVATE_KEY_PATH). If they are unset, tools return a \
-configuration error.
+ASC_PRIVATE_KEY or ASC_PRIVATE_KEY_PATH). If they are unset, App Store Connect \
+tools return a configuration error; the market tools still work.
 
-Coverage is hybrid:
-- Curated tools exist for apps & metadata, in-app purchases, subscriptions \
-  (incl. introductory/promotional/win-back offers and offer codes), versions & \
-  metadata, pricing, availability, App Review submission, TestFlight, \
-  provisioning & bundle-ID capabilities, asset uploads, promoted purchases, \
-  customer reviews, phased release, users & access, in-app events, Xcode Cloud, \
-  and Analytics reports.
-- The generic tools `api_execute` and `api_list` can reach ANY App \
-  Store Connect endpoint (Game Center, App Clips, finance reports, etc.) using \
-  raw JSON:API documents — use them for anything without a dedicated tool.
+Three layers:
+- Curated tools for the common jobs: apps & metadata, in-app purchases, \
+  subscriptions and their offers, versions, pricing, availability, App Review \
+  submission, TestFlight, provisioning, the App Asset Library (screenshots, \
+  previews, product page headers, search result assets), custom product pages, \
+  in-app events, promoted purchases, customer reviews, users, Xcode Cloud, \
+  analytics, sales and finance reports, and webhooks.
+- The full API: api_search finds any of Apple's ~1,300 operations by words \
+  (Game Center, App Clips, background assets, alternative distribution, \
+  product page optimization, anything without a curated tool), api_describe \
+  shows its parameters and body, and api_execute calls it after checking the \
+  request against Apple's spec. api_list pages through any collection.
+- Market tools (search_store_apps, get_store_app, list_store_reviews, \
+  analyze_store_keyword, search_suggestions, ...) read the public App Store \
+  for any app, competitors included, with no API key.
 
 Tips:
 - IDs are opaque strings returned by list/get tools; resolve them first.
 - Pricing requires a price-point ID: use the pricing tools to look them up.
-- Most write operations use JSON:API bodies of the form \
-  {\"data\": {\"type\": ..., \"attributes\": {...}, \"relationships\": {...}}}.
-- `api_list` can walk pages for you: pass `max_pages` instead of calling it \
+- Write bodies are JSON:API: \
+  {\"data\": {\"type\": ..., \"attributes\": {...}, \"relationships\": {...}}}. \
+  When api_execute rejects a request, its error lists what Apple accepts.
+- api_list can walk pages for you: pass `max_pages` instead of calling it \
   again with each `cursor`.
 - Responses are trimmed to fit a context budget. A `_truncated` key means items \
-  were dropped — narrow the query with `limit`/`filter[...]`/`fields[...]` rather \
-  than assuming you saw everything.
-- Analytics report data is downloaded with `download_analytics_segment` using a \
-  segment URL from `list_analytics_report_segments`.
+  were dropped; narrow the query with `limit`/`filter[...]`/`fields[...]`.
+- In-app purchases and subscriptions are submitted for review as their \
+  versions (add_review_submission_item with inAppPurchaseVersion / \
+  subscriptionVersion).
 
 Limitations (enforced by Apple, not this server):
-- New apps CANNOT be created via the API (the `apps` resource allows only \
-  GET and UPDATE). Create the app in the App Store Connect website first; you \
-  can pre-create its bundle ID with create_bundle_id.
-- Sales/finance reports return gzipped TSV, not JSON:API, and are not wrapped here.";
+- New apps cannot be created via the API. Create the app on the App Store \
+  Connect website first; you can pre-create its bundle ID with create_bundle_id.
+- App Privacy labels, agreements, tax and banking have no API.";
 
 const DISCOVERY_INSTRUCTIONS: &str = "\
 This server wraps the Apple App Store Connect API in discovery mode. Use \
@@ -175,12 +181,16 @@ impl AppStoreServer {
             (Group::Users, Self::users_router()),
             (Group::Events, Self::events_router()),
             (Group::XcodeCloud, Self::xcode_cloud_router()),
-            (Group::Analytics, Self::analytics_router()),
+            (
+                Group::Analytics,
+                Self::analytics_router() + Self::reports_router(),
+            ),
             (
                 Group::CustomProductPages,
                 Self::custom_product_pages_router(),
             ),
             (Group::Market, Self::market_router()),
+            (Group::Webhooks, Self::webhooks_router()),
         ]
     }
 

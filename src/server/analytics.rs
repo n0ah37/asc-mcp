@@ -249,6 +249,158 @@ numbers — the other analytics tools only navigate to the segment."
     }
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SalesReportArgs {
+    /// SALES (units and proceeds), SUBSCRIPTION, SUBSCRIPTION_EVENT, SUBSCRIBER,
+    /// SUBSCRIPTION_OFFER_CODE_REDEMPTION, INSTALLS, FIRST_ANNUAL, PRE_ORDER,
+    /// NEWSSTAND or WIN_BACK_ELIGIBILITY.
+    pub report_type: String,
+    /// SUMMARY (default), DETAILED, SUMMARY_INSTALL_TYPE, SUMMARY_TERRITORY or
+    /// SUMMARY_CHANNEL. Each report type accepts only some.
+    #[serde(default)]
+    pub report_sub_type: Option<String>,
+    /// DAILY (default), WEEKLY, MONTHLY or YEARLY.
+    #[serde(default)]
+    pub frequency: Option<String>,
+    /// The period: YYYY-MM-DD for DAILY/WEEKLY, YYYY-MM for MONTHLY, YYYY for
+    /// YEARLY. Omit for the latest available.
+    #[serde(default)]
+    pub report_date: Option<String>,
+    /// Report format version, e.g. "1_0" (SALES) or "1_4" (SUBSCRIPTION). Omit
+    /// for Apple's default.
+    #[serde(default)]
+    pub version: Option<String>,
+    /// Your vendor number (Payments and Financial Reports). Defaults to the
+    /// ASC_VENDOR_NUMBER environment variable.
+    #[serde(default)]
+    pub vendor_number: Option<String>,
+    /// Maximum rows to return (default 100, maximum 5000).
+    #[serde(default)]
+    pub max_rows: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct FinanceReportArgs {
+    /// FINANCIAL or FINANCE_DETAIL.
+    pub report_type: String,
+    /// Fiscal month, YYYY-MM.
+    pub report_date: String,
+    /// Region code, e.g. "US", "CA", "EU", "ZZ" (all regions, FINANCE_DETAIL only).
+    pub region_code: String,
+    /// Your vendor number. Defaults to the ASC_VENDOR_NUMBER environment variable.
+    #[serde(default)]
+    pub vendor_number: Option<String>,
+    /// Maximum rows to return (default 100, maximum 5000).
+    #[serde(default)]
+    pub max_rows: Option<usize>,
+}
+
+fn vendor_number(arg: Option<String>) -> Result<String, AscError> {
+    arg.filter(|v| !v.trim().is_empty())
+        .or_else(|| {
+            std::env::var("ASC_VENDOR_NUMBER")
+                .ok()
+                .filter(|v| !v.is_empty())
+        })
+        .ok_or_else(|| {
+            AscError::InvalidRequest(
+                "a vendor number is required: pass vendor_number or set ASC_VENDOR_NUMBER \
+(App Store Connect → Payments and Financial Reports, top left)"
+                    .into(),
+            )
+        })
+}
+
+fn sales_report_query(args: &SalesReportArgs, vendor: String) -> Vec<(String, String)> {
+    let mut q = vec![
+        ("filter[vendorNumber]".to_string(), vendor),
+        ("filter[reportType]".to_string(), args.report_type.clone()),
+        (
+            "filter[reportSubType]".to_string(),
+            args.report_sub_type
+                .clone()
+                .unwrap_or_else(|| "SUMMARY".into()),
+        ),
+        (
+            "filter[frequency]".to_string(),
+            args.frequency.clone().unwrap_or_else(|| "DAILY".into()),
+        ),
+    ];
+    if let Some(d) = &args.report_date {
+        q.push(("filter[reportDate]".into(), d.clone()));
+    }
+    if let Some(v) = &args.version {
+        q.push(("filter[version]".into(), v.clone()));
+    }
+    q
+}
+
+#[tool_router(router = reports_router, vis = "pub(crate)")]
+impl AppStoreServer {
+    /// Download a sales/trends report as rows.
+    #[tool(
+        description = "Download a Sales and Trends report (units, proceeds, installs, subscription \
+counts and events, offer-code redemptions) and return it as JSON rows. Apple publishes daily \
+reports the next day; omit report_date for the latest. Needs your vendor number (argument or \
+ASC_VENDOR_NUMBER)."
+    )]
+    async fn download_sales_report(
+        &self,
+        Parameters(args): Parameters<SalesReportArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        let vendor = vendor_number(args.vendor_number.clone()).map_err(AppStoreServer::map_err)?;
+        let query = sales_report_query(&args, vendor);
+        self.report_rows("/v1/salesReports", &query, args.max_rows)
+            .await
+    }
+
+    /// Download a financial report as rows.
+    #[tool(
+        description = "Download a monthly financial report (FINANCIAL: earnings per region; \
+FINANCE_DETAIL: per-transaction proceeds for all regions with region_code ZZ) and return it as \
+JSON rows. Needs your vendor number (argument or ASC_VENDOR_NUMBER)."
+    )]
+    async fn download_finance_report(
+        &self,
+        Parameters(args): Parameters<FinanceReportArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        let vendor = vendor_number(args.vendor_number).map_err(AppStoreServer::map_err)?;
+        let query = vec![
+            ("filter[vendorNumber]".to_string(), vendor),
+            ("filter[reportType]".to_string(), args.report_type),
+            ("filter[reportDate]".to_string(), args.report_date),
+            ("filter[regionCode]".to_string(), args.region_code),
+        ];
+        self.report_rows("/v1/financeReports", &query, args.max_rows)
+            .await
+    }
+}
+
+impl AppStoreServer {
+    async fn report_rows(
+        &self,
+        path: &str,
+        query: &[(String, String)],
+        max_rows: Option<usize>,
+    ) -> Result<CallToolResult, McpError> {
+        let bytes = self
+            .client
+            .get_bytes(path, query)
+            .await
+            .map_err(AppStoreServer::map_err)?;
+        let max_rows = max_rows.unwrap_or(report::DEFAULT_MAX_ROWS);
+        let parsed = tokio::task::spawn_blocking(move || report::parse_segment(&bytes, max_rows))
+            .await
+            .map_err(|e| {
+                AppStoreServer::map_err(AscError::Parse(format!(
+                    "the report parsing task did not finish: {e}"
+                )))
+            })?
+            .map_err(AppStoreServer::map_err)?;
+        self.ok_json(parsed.to_json())
+    }
+}
+
 // ---- Pure JSON:API document builders (unit-tested below) --------------------
 
 /// Build the request body for POST /v1/analyticsReportRequests.
@@ -428,5 +580,49 @@ mod tests {
                 .unwrap_err();
             assert!(err.message.contains("403"), "{}", err.message);
         }
+    }
+}
+
+#[cfg(test)]
+mod report_tool_tests {
+    use super::*;
+    use crate::testing::{result_text, test_server};
+    use std::io::Write;
+    use wiremock::matchers::{method, path, query_param};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn a_sales_report_comes_back_as_rows() {
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(b"Provider\tSKU\tUnits\nAPPLE\tcom.example\t3\n")
+            .unwrap();
+        let body = gz.finish().unwrap();
+
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/salesReports"))
+            .and(query_param("filter[vendorNumber]", "85000000"))
+            .and(query_param("filter[reportSubType]", "SUMMARY"))
+            .and(query_param("filter[frequency]", "DAILY"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(body))
+            .expect(1)
+            .mount(&mock)
+            .await;
+
+        let result = test_server(&mock.uri())
+            .download_sales_report(Parameters(SalesReportArgs {
+                report_type: "SALES".into(),
+                report_sub_type: None,
+                frequency: None,
+                report_date: None,
+                version: None,
+                vendor_number: Some("85000000".into()),
+                max_rows: None,
+            }))
+            .await
+            .unwrap();
+        let text = result_text(&result);
+        assert!(text.contains("com.example"), "{text}");
+        assert!(text.contains("Units"), "{text}");
     }
 }

@@ -7,7 +7,7 @@
 ## Build, Test, and Development Commands
 
 - `cargo build --locked` builds the debug binary using `Cargo.lock`.
-- `cargo build --release --locked` creates `target/release/appstore-mcp`.
+- `cargo build --release --locked` creates `target/release/asc-mcp`.
 - `cargo test --locked` runs unit and integration tests without live Apple credentials.
 - `cargo fmt --all -- --check` verifies Rust formatting.
 - `cargo clippy --all-targets -- -D warnings` enforces the CI lint gate.

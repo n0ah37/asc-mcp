@@ -1,6 +1,6 @@
 # Tool reference
 
-All **126** tools exposed by `appstore-mcp`, grouped by domain (39 read-only). Auto-generated from the server's live `tools/list` schemas by `scripts/gen_tools_doc.py` — regenerate after changing tools.
+All **145** tools exposed by `asc-mcp`, grouped by domain (53 read-only). Auto-generated from the server's live `tools/list` schemas by `scripts/gen_tools_doc.py` — regenerate after changing tools.
 
 > Required parameters are marked **yes**. IDs are opaque strings returned by the `list_*`/`get_*` tools — resolve them first. Anything not covered here is reachable via the generic `api_execute` / `api_list` tools.
 
@@ -8,7 +8,9 @@ All **126** tools exposed by `appstore-mcp`, grouped by domain (39 read-only). A
 
 ## Contents
 
-- [Generic](#generic) (2)
+- [Full API](#full-api) (4)
+- [Webhooks](#webhooks) (7)
+- [Market](#market) (8)
 - [Apps & metadata](#apps--metadata) (8)
 - [In-app purchases (v2)](#in-app-purchases-v2) (7)
 - [Subscriptions](#subscriptions) (6)
@@ -28,18 +30,41 @@ All **126** tools exposed by `appstore-mcp`, grouped by domain (39 read-only). A
 - [Users & access](#users--access) (4)
 - [In-app events](#in-app-events) (3)
 - [Xcode Cloud](#xcode-cloud) (5)
-- [Analytics reports](#analytics-reports) (5)
+- [Analytics reports](#analytics-reports) (7)
 - [Custom product pages](#custom-product-pages) (12)
 
-## Generic
+## Full API
 
-Reach any endpoint with raw JSON:API.
+Search, describe and call any of the 1,300 operations in Apple's App Store Connect OpenAPI spec, checked against the spec before sending.
+
+### `api_search`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+Search every App Store Connect API operation (all of Apple's OpenAPI spec, including Game Center, App Clips, webhooks, sales and finance reports, background assets, alternative distribution and anything without a dedicated tool) by words. Returns method, path and operationId. Follow with api_describe for parameters and body shape, then api_execute.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `query` | string | **yes** | Words describing the operation, e.g. "webhook deliveries", "create custom product page", "sales report", "game center leaderboard". |
+| `limit` | integer | no | Maximum results (default 15, maximum 50). |
+| `method` | string | no | Restrict to one HTTP method (GET, POST, PATCH, PUT, DELETE). |
+
+### `api_describe`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+Describe one App Store Connect API operation: its accepted query parameters (filters, fields, include, sort, limit, with allowed values and which are required) and its request body schema with references expanded. Use the path from api_search.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `method` | string | **yes** | HTTP method of the operation. |
+| `path` | string | **yes** | Path from api_search, templated ("/v1/apps/{id}") or concrete ("/v1/apps/123"). |
 
 ### `api_execute`
 
 🔴 **Destructive** — removes or invalidates something.
 
-Make a raw authenticated request to ANY App Store Connect API endpoint (method + path + optional query + optional JSON:API body). Use this for operations without a dedicated tool. Returns the parsed JSON response.
+Call ANY App Store Connect API operation (method + path + optional query + optional JSON:API body) and return the parsed JSON response. The request is first checked against Apple's OpenAPI spec: an unknown path, an unaccepted or missing query parameter, or a body attribute Apple does not define comes back as a clear error before anything is sent. Find operations with api_search and their shape with api_describe.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -47,6 +72,7 @@ Make a raw authenticated request to ANY App Store Connect API endpoint (method +
 | `path` | string | **yes** | API path or full URL, e.g. "/v1/apps", "v2/inAppPurchases/{id}", or a `next` link returned by a previous list call. |
 | `body` | object | no | Optional JSON:API request body for POST/PATCH/PUT — the full document, e.g. {"data": {"type": "apps", "id": "123", "attributes": {...}}}. |
 | `query` | object | no | Optional query parameters, e.g. {"filter[bundleId]": "com.example.app", "limit": 50}. Array values are comma-joined. |
+| `validate` | boolean | no | Check the request against Apple's OpenAPI spec before sending (default true). Set false only when Apple has added something newer than the embedded spec. |
 
 ### `api_list`
 
@@ -63,6 +89,193 @@ List any App Store Connect collection with optional filters, sort, include, and 
 | `limit` | integer | no | Page size (App Store Connect maximum is 200). Sparse-fieldset selections (`fields[...]`) can be passed via `filters` if needed. |
 | `max_pages` | integer | no | Follow `links.next` and merge up to this many pages into one result (default 1, maximum 20). Saves a round trip per page. |
 | `sort` | string | no | Comma-separated sort keys, e.g. "-createdDate". |
+
+## Webhooks
+
+Have Apple post App Store Connect events (version state, build processing, TestFlight feedback) to your URL.
+
+### `list_webhooks`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+List an app's App Store Connect webhooks.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `app_id` | string | **yes** | The app's App Store Connect ID. |
+
+### `create_webhook`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
+
+Create a webhook so Apple posts App Store Connect events (version state changes, build processing, TestFlight feedback, background asset releases) to your HTTPS URL, signed with your secret. Send a test with create_webhook_ping.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `app_id` | string | **yes** | The app's App Store Connect ID. |
+| `event_types` | array of string | **yes** | Events to send, e.g. ["APP_STORE_VERSION_APP_VERSION_STATE_UPDATED", "BUILD_UPLOAD_STATE_UPDATED", "BETA_FEEDBACK_SCREENSHOT_SUBMISSION_CREATED", "BETA_FEEDBACK_CRASH_SUBMISSION_CREATED", "BUILD_BETA_DETAIL_EXTERNAL_BUILD_STATE_UPDATED"]. api_describe on POST /v1/webhooks lists them all. |
+| `name` | string | **yes** | A name for the webhook. |
+| `secret` | string | **yes** | Shared secret Apple uses to sign each delivery (verify the `X-Apple-Signature` header with it). |
+| `url` | string | **yes** | The HTTPS URL Apple posts events to. |
+| `enabled` | boolean | no | Start enabled (default true). |
+
+### `update_webhook`
+
+🟡 **Writes** — sets fields; calling it twice leaves the same state.
+
+Update a webhook: name, URL, secret, event list, or enabled. Only the fields you pass change.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `webhook_id` | string | **yes** | The webhook ID. |
+| `enabled` | boolean | no |  |
+| `event_types` | array of string | no | Replaces the whole list of events. |
+| `name` | string | no |  |
+| `secret` | string | no |  |
+| `url` | string | no |  |
+
+### `delete_webhook`
+
+🔴 **Destructive** — removes or invalidates something.
+
+Delete a webhook by ID.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `webhook_id` | string | **yes** | The webhook ID. |
+
+### `list_webhook_deliveries`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+List a webhook's deliveries with their state, response and event, optionally only failed ones or only those since a time.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `webhook_id` | string | **yes** | The webhook ID. |
+| `delivery_state` | string | no | Comma-separated: SUCCEEDED, FAILED, PENDING. |
+| `limit` | integer | no | Page size (maximum 200). |
+| `since` | string | no | Only deliveries created at or after this ISO-8601 time. |
+
+### `create_webhook_redelivery`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
+
+Send a past webhook delivery again (for one your server missed).
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `delivery_id` | string | **yes** | The ID of the delivery to send again (from list_webhook_deliveries). |
+
+### `create_webhook_ping`
+
+🟡 **Writes** — creates something new; calling it twice creates two.
+
+Send a test ping to a webhook's URL.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `webhook_id` | string | **yes** | The webhook ID. |
+
+## Market
+
+Public App Store data for any app, no API key: search, listings, reviews, keyword competition, and Apple's search suggestions.
+
+### `search_store_apps`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+Search the public App Store as a user would (any developer's apps, no API key needed). Returns each app's ID, name, developer, rating, rating count, price, genre and last update. Ranking comes from the iTunes Search API and approximates the App Store app's.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `term` | string | **yes** | Search term, e.g. "habit tracker". |
+| `country` | string | no | Two-letter storefront country (default "us"). |
+| `limit` | integer | no | Results to return (1–200, default 25). |
+
+### `get_store_app`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+Get any app's public App Store listing by numeric ID or bundle ID: name, description, release notes, rating and rating count, price, genre, screenshots, languages, size and dates. No API key needed; works for competitors.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `app` | string | **yes** | The app's numeric App Store ID (e.g. "389801252") or bundle ID. |
+| `country` | string | no | Two-letter storefront country (default "us"). |
+
+### `list_developer_store_apps`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+List a developer's public App Store apps by numeric developer (artist) ID.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `developer_id` | string | **yes** | The developer's numeric artist ID (the `developerId` field of get_store_app). |
+| `country` | string | no | Two-letter storefront country (default "us"). |
+| `limit` | integer | no | Maximum apps (default 50, maximum 200). |
+
+### `list_similar_store_apps`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+List apps competing with an app: the top public App Store results for its primary genre, excluding the app itself. A rough competitor set, not Apple's "You might also like" list.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `app` | string | **yes** | The app's numeric App Store ID or bundle ID. |
+| `country` | string | no | Two-letter storefront country (default "us"). |
+| `limit` | integer | no | Maximum apps (default 20, maximum 100). |
+
+### `list_store_reviews`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+Fetch any app's public App Store customer reviews for one storefront (rating, title, text, version, date), most recent or most helpful first, up to 500. For your own apps, list_customer_reviews reads App Store Connect and can respond.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `app` | string | **yes** | The app's numeric App Store ID or bundle ID. Works for any app. |
+| `country` | string | no | Two-letter storefront country (default "us"). Reviews are per storefront. |
+| `pages` | integer | no | Pages of 50 to fetch (1–10, default 1). |
+| `sort` | string | no | "recent" (default) or "helpful". |
+
+### `analyze_store_reviews`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+Analyze any app's public reviews in one storefront: rating distribution, average, average by app version, and the words that recur in 1–2 star versus 4–5 star reviews. Reads up to 500 reviews.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `app` | string | **yes** | The app's numeric App Store ID or bundle ID. Works for any app. |
+| `country` | string | no | Two-letter storefront country (default "us"). Reviews are per storefront. |
+| `pages` | integer | no | Pages of 50 to fetch (1–10, default 1). |
+| `sort` | string | no | "recent" (default) or "helpful". |
+
+### `analyze_store_keyword`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+Measure how contested an App Store keyword is from its live top results: median and minimum rating counts of the apps ranking for it, average rating, how many titles contain it, paid share, developers holding several slots, and the ranked apps. Pair with search_suggestions for demand.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `keyword` | string | **yes** | The keyword or phrase, e.g. "meditation timer". |
+| `country` | string | no | Two-letter storefront country (default "us"). |
+| `limit` | integer | no | Top results to analyze (1–100, default 25). |
+
+### `search_suggestions`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+Get the App Store's own search suggestions for a partial term, in Apple's order (most searched first): the autocomplete users see. A real demand signal for keywords; an empty list means few people search it.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `term` | string | **yes** | The start of a search, e.g. "medit". Apple returns what users type next. |
+| `country` | string | no | Two-letter storefront country (default "us"). Supported: us ca gb au nz ie fr de at ch be nl lu it es pt se no dk fi gr jp cn hk tw kr sg in mx br ru. |
 
 ## Apps & metadata
 
@@ -128,7 +341,7 @@ Update an appInfo's attributes by appInfo ID.
 
 🟡 **Writes** — sets fields; calling it twice leaves the same state.
 
-Set an app's age-rating questionnaire answers (required before submission). Pass the ageRatingDeclaration ID and the questionnaire attributes. Enum values are typically NONE / INFREQUENT_OR_MILD / FREQUENT_OR_INTENSE, plus booleans for items like gambling and unrestrictedWebAccess.
+Set an app's age-rating questionnaire answers (required before submission). Pass the ageRatingDeclaration ID (from the app info) and the attributes to change. Booleans: advertising, ageAssurance, gambling, healthOrWellnessTopics, lootBox, messagingAndChat, parentalControls, socialMedia, socialMediaAgeRestricted, unrestrictedWebAccess, userGeneratedContent. Frequency answers (NONE / INFREQUENT_OR_MILD / FREQUENT_OR_INTENSE): alcoholTobaccoOrDrugUseOrReferences, contests, gamblingSimulated, gunsOrOtherWeapons, horrorOrFearThemes, matureOrSuggestiveThemes, medicalOrTreatmentInformation, profanityOrCrudeHumor, sexualContentGraphicAndNudity, sexualContentOrNudity, violenceCartoonOrFantasy, violenceRealistic, violenceRealisticProlongedGraphicOrSadistic. Also kidsAgeBand, ageRatingOverrideV2, koreaAgeRatingOverride, developerAgeRatingInfoUrl. Answers are checked against Apple's spec before sending.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -410,11 +623,11 @@ Open a new App Review submission for an app + platform. Then attach items with a
 
 🟡 **Writes** — creates something new; calling it twice creates two.
 
-Attach an App Store version or in-app event to an open review submission.
+Attach an item to an open review submission: an App Store version, in-app event, custom product page version, product page optimization test, App Asset Library image or video, in-app purchase version, subscription version, subscription group version, or background asset version. In-app purchases and subscriptions are submitted as their versions (API 4.4.1+), not as the product itself.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `item_id` | string | **yes** | The ID of the version/event being submitted. |
+| `item_id` | string | **yes** | The ID of the item being submitted (for in-app purchases and subscriptions, the version ID). |
 | `item_kind` | object | **yes** | What kind of item to attach. |
 | `review_submission_id` | string | **yes** | The review submission ID (from create_review_submission). |
 
@@ -944,13 +1157,13 @@ List the videos in an App Asset Library, optionally filtered by category, state,
 
 🟡 **Writes** — creates something new; calling it twice creates two.
 
-Upload an image to an App Asset Library (reserve → upload → commit). Then place it on a localization with create_asset_library_placement.
+Upload an image to an App Asset Library (reserve → upload → commit). Then place it on a localization with create_asset_library_placement. For a product page header or search result asset, upload with category CREATIVE_ASSETS and place it with placement type PRODUCT_PAGE_HEADER_ASSET or APP_STORE_SEARCH_RESULTS_ASSET.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `asset_library_id` | string | **yes** | The appAssetLibrary ID (from get_app_asset_library). |
 | `file_path` | string | **yes** | Local path to the image file (PNG/JPEG). |
-| `category` | string | no | "APP_SCREENSHOTS_AND_PREVIEWS" (default) or "CREATIVE_ASSETS". |
+| `category` | string | no | "APP_SCREENSHOTS_AND_PREVIEWS" (default) or "CREATIVE_ASSETS". Use CREATIVE_ASSETS for product page headers, search result assets and in-app event artwork. |
 | `reference_name` | string | no | An internal name to find the asset by later. |
 
 ### `upload_asset_library_video`
@@ -963,7 +1176,7 @@ Upload a video (app preview or creative) to an App Asset Library (reserve → up
 |---|---|---|---|
 | `asset_library_id` | string | **yes** | The appAssetLibrary ID (from get_app_asset_library). |
 | `file_path` | string | **yes** | Local path to the video file. |
-| `category` | string | no | "APP_SCREENSHOTS_AND_PREVIEWS" (default) or "CREATIVE_ASSETS". |
+| `category` | string | no | "APP_SCREENSHOTS_AND_PREVIEWS" (default) or "CREATIVE_ASSETS". Use CREATIVE_ASSETS for product page headers, search result assets and in-app event artwork. |
 | `preview_frame_time_code` | string | no | Poster-frame timecode, e.g. "00:00:05:00". |
 | `reference_name` | string | no | An internal name to find the asset by later. |
 
@@ -997,7 +1210,7 @@ Place an App Asset Library image or video on a localization: an App Store versio
 |---|---|---|---|
 | `asset_id` | string | **yes** | The appAssetLibraryImage or appAssetLibraryVideo ID to place. |
 | `media_type` | string | **yes** | "image" or "video". |
-| `placement_type` | string | **yes** | e.g. "APP_SCREENSHOT", "APP_PREVIEW", "IMESSAGE_APP_SCREENSHOT", "EVENT_CARD_ASSET", "EVENT_DETAILS_PAGE_ASSET". |
+| `placement_type` | string | **yes** | "APP_SCREENSHOT", "APP_PREVIEW", "IMESSAGE_APP_SCREENSHOT", or a creative asset: "PRODUCT_PAGE_HEADER_ASSET" (the product page header), "APP_STORE_SEARCH_RESULTS_ASSET" (the search result card), "EVENT_CARD_ASSET", "EVENT_DETAILS_PAGE_ASSET", "SEARCH_RESULTS_ADS_ASSET", "TODAY_TAB_ADS_ASSET", "RETENTION_MESSAGE_ASSET". |
 | `target_id` | string | **yes** | The ID of the target localization. |
 | `target_type` | string | **yes** | Where to place it: "app_store_version_localization", "custom_product_page_localization", "app_event_localization", or "experiment_treatment_localization". |
 | `placement_group` | string | no | The device profile group, e.g. "IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE"; valid values are the placementProfileGroups in list_asset_library_ref_data. |
@@ -1424,11 +1637,11 @@ List all CI workflows for a given Xcode Cloud product. Use list_ci_products to o
 
 🟡 **Writes** — creates something new; calling it twice creates two.
 
-Start a new Xcode Cloud build run for a workflow on a specific branch or tag. Provide the workflow_id (from list_ci_workflows) and source_branch_or_tag_id, which is a scmGitReference resource ID. Obtain it by listing the workflow's repository git references with: api_list { "path": "/v1/ciWorkflows/{workflow_id}/repository/gitReferences" }.
+Start a new Xcode Cloud build run for a workflow on a specific branch or tag. Provide the workflow_id (from list_ci_workflows) and source_branch_or_tag_id, which is a scmGitReference resource ID. Obtain it with api_list: first "/v1/ciWorkflows/{workflow_id}/repository" for the repository ID, then "/v1/scmRepositories/{repository_id}/gitReferences".
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `source_branch_or_tag_id` | string | **yes** | The scmGitReference resource ID for the branch or tag to build. Obtain it by listing the workflow's repository git references via GET /v1/ciWorkflows/{id}/repository/gitReferences (use api_list). |
+| `source_branch_or_tag_id` | string | **yes** | The scmGitReference resource ID for the branch or tag to build. Obtain it with api_list: GET /v1/ciWorkflows/{id}/repository for the repository ID, then GET /v1/scmRepositories/{id}/gitReferences. |
 | `workflow_id` | string | **yes** | The Xcode Cloud workflow ID. |
 
 ### `get_ci_build_run`
@@ -1514,6 +1727,36 @@ Download an analytics report segment and return its contents as JSON rows. Takes
 |---|---|---|---|
 | `url` | string | **yes** | The segment's presigned download URL, taken from a segment's `attributes.url` in list_analytics_report_segments. These URLs expire, so fetch a fresh one if the download is rejected. |
 | `max_rows` | integer | no | Maximum data rows to return (default 100, hard maximum 5000). The full row count is reported regardless of how many rows come back. |
+
+### `download_sales_report`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+Download a Sales and Trends report (units, proceeds, installs, subscription counts and events, offer-code redemptions) and return it as JSON rows. Apple publishes daily reports the next day; omit report_date for the latest. Needs your vendor number (argument or ASC_VENDOR_NUMBER).
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `report_type` | string | **yes** | SALES (units and proceeds), SUBSCRIPTION, SUBSCRIPTION_EVENT, SUBSCRIBER, SUBSCRIPTION_OFFER_CODE_REDEMPTION, INSTALLS, FIRST_ANNUAL, PRE_ORDER, NEWSSTAND or WIN_BACK_ELIGIBILITY. |
+| `frequency` | string | no | DAILY (default), WEEKLY, MONTHLY or YEARLY. |
+| `max_rows` | integer | no | Maximum rows to return (default 100, maximum 5000). |
+| `report_date` | string | no | The period: YYYY-MM-DD for DAILY/WEEKLY, YYYY-MM for MONTHLY, YYYY for YEARLY. Omit for the latest available. |
+| `report_sub_type` | string | no | SUMMARY (default), DETAILED, SUMMARY_INSTALL_TYPE, SUMMARY_TERRITORY or SUMMARY_CHANNEL. Each report type accepts only some. |
+| `vendor_number` | string | no | Your vendor number (Payments and Financial Reports). Defaults to the ASC_VENDOR_NUMBER environment variable. |
+| `version` | string | no | Report format version, e.g. "1_0" (SALES) or "1_4" (SUBSCRIPTION). Omit for Apple's default. |
+
+### `download_finance_report`
+
+🟢 **Read-only** — safe to call without confirmation.
+
+Download a monthly financial report (FINANCIAL: earnings per region; FINANCE_DETAIL: per-transaction proceeds for all regions with region_code ZZ) and return it as JSON rows. Needs your vendor number (argument or ASC_VENDOR_NUMBER).
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `region_code` | string | **yes** | Region code, e.g. "US", "CA", "EU", "ZZ" (all regions, FINANCE_DETAIL only). |
+| `report_date` | string | **yes** | Fiscal month, YYYY-MM. |
+| `report_type` | string | **yes** | FINANCIAL or FINANCE_DETAIL. |
+| `max_rows` | integer | no | Maximum rows to return (default 100, maximum 5000). |
+| `vendor_number` | string | no | Your vendor number. Defaults to the ASC_VENDOR_NUMBER environment variable. |
 
 ## Custom product pages
 

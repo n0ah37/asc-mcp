@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 
 #[test]
 fn discovery_hides_domain_names_and_dispatches_only_allowed_tools() {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_appstore-mcp"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_asc-mcp"))
         .env_remove("ASC_ISSUER_ID")
         .env_remove("ASC_KEY_ID")
         .env_remove("ASC_PRIVATE_KEY")

@@ -38,7 +38,7 @@ impl AscClient {
     pub fn new(config: Config) -> Self {
         let config = Arc::new(config);
         let mut builder =
-            Client::builder().user_agent(concat!("appstore-mcp/", env!("CARGO_PKG_VERSION")));
+            Client::builder().user_agent(concat!("asc-mcp/", env!("CARGO_PKG_VERSION")));
         // Without these a stalled connection hangs the tool call forever, and an
         // MCP client on stdio has no way to cancel it.
         if let Some(t) = config.http.connect_timeout {
@@ -155,6 +155,38 @@ impl AscClient {
             }
         }
         Ok(merged)
+    }
+
+    /// Authenticated `GET` returning raw bytes, for the endpoints that answer
+    /// with a gzipped file instead of JSON:API (sales and finance reports).
+    pub async fn get_bytes(
+        &self,
+        path: &str,
+        query: &[(String, String)],
+    ) -> Result<Bytes, AscError> {
+        let url = self.resolve_url(path)?;
+        let response = self
+            .send_with_retry(true, &url, || async {
+                let token = self.auth.token().await?;
+                let req = self
+                    .http
+                    .get(&url)
+                    .bearer_auth(token)
+                    .header(
+                        reqwest::header::ACCEPT,
+                        "application/a-gzip, application/json",
+                    )
+                    .query(query);
+                Ok(self.with_transfer_timeout(req))
+            })
+            .await?;
+        let status = response.status();
+        let bytes = response.bytes().await?;
+        if status.is_success() {
+            Ok(bytes)
+        } else {
+            Err(api_error(status.as_u16(), &String::from_utf8_lossy(&bytes)))
+        }
     }
 
     /// `GET` an absolute URL **without** the bearer token, returning raw bytes.

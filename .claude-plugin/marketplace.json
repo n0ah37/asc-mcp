@@ -1,19 +1,19 @@
 {
-  "name": "forgeopslabs",
+  "name": "n0ah37",
   "owner": {
-    "name": "forgeopslabs"
+    "name": "n0ah37"
   },
-  "description": "MCP servers and tools from forgeopslabs.",
+  "description": "MCP servers and tools from n0ah37.",
   "plugins": [
     {
-      "name": "appstore-mcp",
-      "source": "./plugins/appstore-mcp",
-      "description": "Apple App Store Connect API \u2014 126 tools (apps, in-app purchases, subscriptions, TestFlight, provisioning, analytics, and more).",
-      "version": "0.4.0",
+      "name": "asc-mcp",
+      "source": "./plugins/asc-mcp",
+      "description": "Apple App Store Connect API \u2014 145 tools (apps, in-app purchases, subscriptions, TestFlight, provisioning, analytics, and more).",
+      "version": "0.5.0",
       "author": {
-        "name": "forgeopslabs"
+        "name": "n0ah37"
       },
-      "homepage": "https://github.com/forgeopslabs/appstore-mcp",
+      "homepage": "https://github.com/n0ah37/asc-mcp",
       "license": "MIT",
       "keywords": [
         "app-store-connect",
