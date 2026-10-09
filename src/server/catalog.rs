@@ -52,10 +52,12 @@ pub enum Group {
     XcodeCloud,
     Analytics,
     CustomProductPages,
+    Market,
+    Webhooks,
 }
 
 impl Group {
-    pub const ALL: [Group; 20] = [
+    pub const ALL: [Group; 22] = [
         Group::Generic,
         Group::Apps,
         Group::Iap,
@@ -76,6 +78,8 @@ impl Group {
         Group::XcodeCloud,
         Group::Analytics,
         Group::CustomProductPages,
+        Group::Market,
+        Group::Webhooks,
     ];
 
     /// The everyday ship-an-app subset, for `ASC_TOOLS=core`.
@@ -110,6 +114,8 @@ impl Group {
             Group::XcodeCloud => "xcode-cloud",
             Group::Analytics => "analytics",
             Group::CustomProductPages => "custom-product-pages",
+            Group::Market => "market",
+            Group::Webhooks => "webhooks",
         }
     }
 
@@ -186,6 +192,8 @@ const VERBS: &[(&str, Effect)] = &[
     ("request_", Effect::Create),
     ("respond_", Effect::Create),
     ("download_", Effect::Read),
+    ("search_", Effect::Read),
+    ("analyze_", Effect::Read),
     // Setting named fields to given values.
     ("update_", Effect::Update),
     ("set_", Effect::Update),
@@ -197,8 +205,11 @@ const VERBS: &[(&str, Effect)] = &[
 /// Classify a tool by name, or return `None` if its verb isn't recognised.
 pub fn classify(name: &str) -> Option<Effect> {
     match name {
-        "appstore_request" => Some(Effect::MethodDependent),
-        "appstore_list" => Some(Effect::Read),
+        "api_execute" => Some(Effect::MethodDependent),
+        "api_list" => Some(Effect::Read),
+        "api_search" | "api_describe" => Some(Effect::Read),
+        "search_tools" => Some(Effect::Read),
+        "call_discovered_tool" => Some(Effect::MethodDependent),
         _ => VERBS
             .iter()
             .find(|(verb, _)| name.starts_with(verb))
@@ -318,7 +329,7 @@ mod tests {
 
     #[test]
     fn read_verbs_are_read_only() {
-        for name in ["list_apps", "get_app", "appstore_list", "download_report"] {
+        for name in ["list_apps", "get_app", "api_list", "download_report"] {
             assert_eq!(classify(name), Some(Effect::Read), "{name}");
         }
     }

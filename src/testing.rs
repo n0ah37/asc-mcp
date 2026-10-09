@@ -64,6 +64,15 @@ pub fn test_server(base_url: &str) -> AppStoreServer {
     AppStoreServer::new(test_config(base_url))
 }
 
+/// A server whose public App Store endpoints are also the test server.
+pub fn test_server_with_market(base_url: &str) -> AppStoreServer {
+    let mut server = test_server(base_url);
+    server.market = std::sync::Arc::new(crate::server::market::MarketClient::with_bases(
+        base_url, base_url,
+    ));
+    server
+}
+
 /// The text of a tool result, for asserting on what an agent would see.
 pub fn result_text(result: &rmcp::model::CallToolResult) -> String {
     result

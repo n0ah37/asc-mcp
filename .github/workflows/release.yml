@@ -21,15 +21,15 @@ jobs:
         include:
           - name: macos-universal
             os: macos-latest
-            artifact: appstore-mcp-macos
+            artifact: asc-mcp-macos
           - name: linux-x86_64
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: appstore-mcp-linux
+            artifact: asc-mcp-linux
           - name: windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact: appstore-mcp-windows.exe
+            artifact: asc-mcp-windows.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -43,8 +43,8 @@ jobs:
           cargo build --release --locked --target aarch64-apple-darwin
           cargo build --release --locked --target x86_64-apple-darwin
           lipo -create -output "${{ matrix.artifact }}" \
-            target/aarch64-apple-darwin/release/appstore-mcp \
-            target/x86_64-apple-darwin/release/appstore-mcp
+            target/aarch64-apple-darwin/release/asc-mcp \
+            target/x86_64-apple-darwin/release/asc-mcp
           chmod +x "${{ matrix.artifact }}"
 
       - name: Build (Linux / Windows)
@@ -54,9 +54,9 @@ jobs:
           rustup target add "${{ matrix.target }}"
           cargo build --release --locked --target "${{ matrix.target }}"
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cp "target/${{ matrix.target }}/release/appstore-mcp.exe" "${{ matrix.artifact }}"
+            cp "target/${{ matrix.target }}/release/asc-mcp.exe" "${{ matrix.artifact }}"
           else
-            cp "target/${{ matrix.target }}/release/appstore-mcp" "${{ matrix.artifact }}"
+            cp "target/${{ matrix.target }}/release/asc-mcp" "${{ matrix.artifact }}"
             chmod +x "${{ matrix.artifact }}"
           fi
 
@@ -84,32 +84,32 @@ jobs:
         id: pack
         run: |
           mkdir -p bundle/server
-          cp dist/appstore-mcp-macos/appstore-mcp-macos        bundle/server/appstore-mcp-macos
-          cp dist/appstore-mcp-linux/appstore-mcp-linux        bundle/server/appstore-mcp-linux
-          cp dist/appstore-mcp-windows.exe/appstore-mcp-windows.exe bundle/server/appstore-mcp-windows.exe
-          chmod +x bundle/server/appstore-mcp-macos bundle/server/appstore-mcp-linux
+          cp dist/asc-mcp-macos/asc-mcp-macos        bundle/server/asc-mcp-macos
+          cp dist/asc-mcp-linux/asc-mcp-linux        bundle/server/asc-mcp-linux
+          cp dist/asc-mcp-windows.exe/asc-mcp-windows.exe bundle/server/asc-mcp-windows.exe
+          chmod +x bundle/server/asc-mcp-macos bundle/server/asc-mcp-linux
           cp packaging/mcpb/manifest.json bundle/manifest.json
-          npx --yes @anthropic-ai/mcpb pack bundle appstore-mcp.mcpb
-          SHA=$(sha256sum appstore-mcp.mcpb | cut -d' ' -f1)
+          npx --yes @anthropic-ai/mcpb pack bundle asc-mcp.mcpb
+          SHA=$(sha256sum asc-mcp.mcpb | cut -d' ' -f1)
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
-          echo "$SHA  appstore-mcp.mcpb" > appstore-mcp.mcpb.sha256
+          echo "$SHA  asc-mcp.mcpb" > asc-mcp.mcpb.sha256
 
       - name: Stage release binaries
         run: |
-          cp dist/appstore-mcp-macos/appstore-mcp-macos              appstore-mcp-macos-universal
-          cp dist/appstore-mcp-linux/appstore-mcp-linux             appstore-mcp-linux-x86_64
-          cp dist/appstore-mcp-windows.exe/appstore-mcp-windows.exe appstore-mcp-windows-x86_64.exe
+          cp dist/asc-mcp-macos/asc-mcp-macos              asc-mcp-macos-universal
+          cp dist/asc-mcp-linux/asc-mcp-linux             asc-mcp-linux-x86_64
+          cp dist/asc-mcp-windows.exe/asc-mcp-windows.exe asc-mcp-windows-x86_64.exe
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            appstore-mcp.mcpb
-            appstore-mcp.mcpb.sha256
-            appstore-mcp-macos-universal
-            appstore-mcp-linux-x86_64
-            appstore-mcp-windows-x86_64.exe
+            asc-mcp.mcpb
+            asc-mcp.mcpb.sha256
+            asc-mcp-macos-universal
+            asc-mcp-linux-x86_64
+            asc-mcp-windows-x86_64.exe
 
   # MCP Registry publishing lives in a separate, manually-triggered workflow
   # (.github/workflows/publish-mcp.yml) so it can publish any tag on demand and

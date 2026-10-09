@@ -1,7 +1,80 @@
 # Changelog
 
-All notable changes to `appstore-mcp`. This project follows
+All notable changes to `asc-mcp` (named `appstore-mcp` through 0.4.0). This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.5.0] — 2026-10-10
+
+Renamed to **asc-mcp** (crate, binary, plugin), forked from
+forgeopslabs/appstore-mcp. 145 tools.
+
+### Added
+
+- **Full API search and execute.** Apple's OpenAPI spec (4.5.1, 1,303
+  operations) is embedded, pruned to 120 KB by `scripts/update_spec.py`.
+  `api_search` finds any operation by words, `api_describe` shows its query
+  parameters and request body, and `api_execute` (was `appstore_request`)
+  checks path, query and body against the spec before sending. `api_list`
+  (was `appstore_list`) checks its query the same way.
+- **Market** group, 8 tools for public App Store data with no API key,
+  replacing the iOS half of the mcp-appstore Node server:
+  `search_store_apps`, `get_store_app`, `list_developer_store_apps`,
+  `list_similar_store_apps`, `list_store_reviews`, `analyze_store_reviews`,
+  `analyze_store_keyword`, `search_suggestions`.
+- **Webhooks** group, 7 tools: `list_webhooks`, `create_webhook`,
+  `update_webhook`, `delete_webhook`, `list_webhook_deliveries`,
+  `create_webhook_redelivery`, `create_webhook_ping`.
+- `download_sales_report` and `download_finance_report` return Sales and
+  Trends and financial reports as JSON rows (vendor number from the argument
+  or `ASC_VENDOR_NUMBER`).
+- `add_review_submission_item` accepts in-app purchase versions,
+  subscription versions, subscription group versions, product page
+  optimization tests, Asset Library images and videos, and background asset
+  versions.
+
+- **App Asset Library** (App Store Connect API 4.5.1), 12 tools in the
+  `assets` group: `get_app_asset_library`, `list_asset_library_images`,
+  `list_asset_library_videos`, `upload_asset_library_image`,
+  `upload_asset_library_video`, `delete_asset_library_image`,
+  `delete_asset_library_video`, `create_asset_library_placement`,
+  `list_asset_library_placements`, `delete_asset_library_placement`,
+  `set_asset_library_placement_order`, and `list_asset_library_ref_data`.
+  Uploads reuse the existing reserve → upload → commit flow; the library's
+  commit sends `{ uploaded: true }` without `sourceFileChecksum`, which its
+  update request does not define.
+
+### Fixed
+
+- `upload_app_event_screenshot` no longer sends `sourceFileChecksum`, which
+  `appEventScreenshots` rejects.
+- `set_subscription_price` explains Apple's bare 409 pricing error: no
+  territory availability yet, or a price point from another territory.
+- `set_age_rating` checks answers against Apple's questionnaire schema and
+  lists the current fields (including `ageAssurance`, `advertising`,
+  `healthOrWellnessTopics`).
+- `start_ci_build` pointed at a git-references path the API does not have.
+
+### Changed
+
+- The screenshot-set, preview-set, and in-app event screenshot tools now say in
+  their descriptions that Apple deprecated those resources in API 4.5.1 and
+  name the App Asset Library tool to use instead. They are not removed.
+
+## [0.4.0] — 2026-09-23
+
+### Added
+
+- Optional `ASC_TOOL_DISCOVERY=1` mode exposes only `search_tools`,
+  `get_tool_details`, and `call_discovered_tool`. Search and execution use the
+  same `ASC_TOOLS` and `ASC_READ_ONLY` filters as the normal tool surface.
+  The generic call is conservatively annotated as destructive when writes are
+  enabled; inspect the target tool's annotations before approving writes.
+- Repository contributor guidance in `AGENTS.md`.
+
+### Security
+
+- Updated locked `h2` and `rustls` versions to include fixes for
+  RUSTSEC-2026-0258 and RUSTSEC-2026-0285.
 
 ## [0.3.1] — 2026-08-06
 

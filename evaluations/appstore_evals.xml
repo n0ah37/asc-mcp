@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Evaluation questions for appstore-mcp.
+  Evaluation questions for asc-mcp.
 
   All questions are READ-ONLY and exercise the server's tools (primarily
   `list_territories`, which returns each territory's resource `id` — an ISO 3166-1

@@ -31,8 +31,8 @@ jobs:
       - name: Smoke test (tools/list over stdio, no credentials)
         shell: bash
         run: |
-          BIN="target/debug/appstore-mcp"
-          [ "${{ matrix.os }}" = "windows-latest" ] && BIN="target/debug/appstore-mcp.exe"
+          BIN="target/debug/asc-mcp"
+          [ "${{ matrix.os }}" = "windows-latest" ] && BIN="target/debug/asc-mcp.exe"
           printf '%s\n' \
             '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
             '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
@@ -88,7 +88,7 @@ jobs:
             '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
             '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
             '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' > rpc.jsonl
-          ( cat rpc.jsonl; sleep 2 ) | target/debug/appstore-mcp > ro.jsonl || true
+          ( cat rpc.jsonl; sleep 2 ) | target/debug/asc-mcp > ro.jsonl || true
           python3 - <<'PY'
           import json
           tools = None

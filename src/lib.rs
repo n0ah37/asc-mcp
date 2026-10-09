@@ -1,4 +1,4 @@
-//! `appstore-mcp` — an MCP server exposing the Apple App Store Connect API.
+//! `asc-mcp` — an MCP server exposing the Apple App Store Connect API.
 //!
 //! The binary in `main.rs` is a thin wrapper over this library: it reads
 //! [`config::Config`] from the environment and serves [`server::AppStoreServer`]
@@ -24,6 +24,7 @@ pub mod json;
 pub mod report;
 pub mod retry;
 pub mod server;
+pub mod spec;
 pub mod upload;
 
 #[cfg(test)]

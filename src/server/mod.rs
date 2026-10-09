@@ -8,13 +8,16 @@
 
 mod analytics;
 mod apps;
+mod asset_library;
 mod assets;
 mod availability;
 pub mod catalog;
 mod custom_product_pages;
+mod discovery;
 mod events;
 mod generic;
 mod iap;
+pub(crate) mod market;
 mod offer_codes;
 mod offers;
 mod pricing;
@@ -26,6 +29,7 @@ mod subscriptions;
 mod testflight;
 mod users;
 mod versions;
+mod webhooks;
 mod xcode_cloud;
 
 use std::sync::Arc;
@@ -44,47 +48,65 @@ use catalog::Group;
 
 /// Server instructions shown to MCP clients to orient the agent.
 const INSTRUCTIONS: &str = "\
-This server wraps the Apple App Store Connect API.
+asc-mcp wraps the Apple App Store Connect API, plus public App Store data.
 
 Credentials come from the environment (ASC_ISSUER_ID, ASC_KEY_ID, and either \
-ASC_PRIVATE_KEY or ASC_PRIVATE_KEY_PATH). If they are unset, tools return a \
-configuration error.
+ASC_PRIVATE_KEY or ASC_PRIVATE_KEY_PATH). If they are unset, App Store Connect \
+tools return a configuration error; the market tools still work.
 
-Coverage is hybrid:
-- Curated tools exist for apps & metadata, in-app purchases, subscriptions \
-  (incl. introductory/promotional/win-back offers and offer codes), versions & \
-  metadata, pricing, availability, App Review submission, TestFlight, \
-  provisioning & bundle-ID capabilities, asset uploads, promoted purchases, \
-  customer reviews, phased release, users & access, in-app events, Xcode Cloud, \
-  and Analytics reports.
-- The generic tools `appstore_request` and `appstore_list` can reach ANY App \
-  Store Connect endpoint (Game Center, App Clips, finance reports, etc.) using \
-  raw JSON:API documents — use them for anything without a dedicated tool.
+Three layers:
+- Curated tools for the common jobs: apps & metadata, in-app purchases, \
+  subscriptions and their offers, versions, pricing, availability, App Review \
+  submission, TestFlight, provisioning, the App Asset Library (screenshots, \
+  previews, product page headers, search result assets), custom product pages, \
+  in-app events, promoted purchases, customer reviews, users, Xcode Cloud, \
+  analytics, sales and finance reports, and webhooks.
+- The full API: api_search finds any of Apple's ~1,300 operations by words \
+  (Game Center, App Clips, background assets, alternative distribution, \
+  product page optimization, anything without a curated tool), api_describe \
+  shows its parameters and body, and api_execute calls it after checking the \
+  request against Apple's spec. api_list pages through any collection.
+- Market tools (search_store_apps, get_store_app, list_store_reviews, \
+  analyze_store_keyword, search_suggestions, ...) read the public App Store \
+  for any app, competitors included, with no API key.
 
 Tips:
 - IDs are opaque strings returned by list/get tools; resolve them first.
 - Pricing requires a price-point ID: use the pricing tools to look them up.
-- Most write operations use JSON:API bodies of the form \
-  {\"data\": {\"type\": ..., \"attributes\": {...}, \"relationships\": {...}}}.
-- `appstore_list` can walk pages for you: pass `max_pages` instead of calling it \
+- Write bodies are JSON:API: \
+  {\"data\": {\"type\": ..., \"attributes\": {...}, \"relationships\": {...}}}. \
+  When api_execute rejects a request, its error lists what Apple accepts.
+- api_list can walk pages for you: pass `max_pages` instead of calling it \
   again with each `cursor`.
 - Responses are trimmed to fit a context budget. A `_truncated` key means items \
-  were dropped — narrow the query with `limit`/`filter[...]`/`fields[...]` rather \
-  than assuming you saw everything.
-- Analytics report data is downloaded with `download_analytics_segment` using a \
-  segment URL from `list_analytics_report_segments`.
+  were dropped; narrow the query with `limit`/`filter[...]`/`fields[...]`.
+- In-app purchases and subscriptions are submitted for review as their \
+  versions (add_review_submission_item with inAppPurchaseVersion / \
+  subscriptionVersion).
 
 Limitations (enforced by Apple, not this server):
-- New apps CANNOT be created via the API (the `apps` resource allows only \
-  GET and UPDATE). Create the app in the App Store Connect website first; you \
-  can pre-create its bundle ID with create_bundle_id.
-- Sales/finance reports return gzipped TSV, not JSON:API, and are not wrapped here.";
+- New apps cannot be created via the API. Create the app on the App Store \
+  Connect website first; you can pre-create its bundle ID with create_bundle_id.
+- App Privacy labels, agreements, tax and banking have no API.";
+
+const DISCOVERY_INSTRUCTIONS: &str = "\
+This server wraps the Apple App Store Connect API in discovery mode. Use \
+search_tools to find operations, get_tool_details to inspect an operation's \
+input schema and safety annotations, then call_discovered_tool with its exact \
+name and arguments. call_discovered_tool can write or delete account data; \
+check the inspected annotations and obtain approval before writes. \
+ASC_TOOLS and ASC_READ_ONLY still restrict which operations are available. \
+Credentials come from ASC_ISSUER_ID, ASC_KEY_ID, and ASC_PRIVATE_KEY or \
+ASC_PRIVATE_KEY_PATH. A _truncated response means narrow the request.";
 
 /// The App Store Connect MCP server.
 #[derive(Clone)]
 pub struct AppStoreServer {
     pub(crate) client: Arc<AscClient>,
+    /// Public App Store endpoints, which need no API key (see [`market`]).
+    pub(crate) market: Arc<market::MarketClient>,
     tool_router: ToolRouter<AppStoreServer>,
+    discovery_router: Option<ToolRouter<AppStoreServer>>,
 }
 
 impl AppStoreServer {
@@ -104,10 +126,20 @@ impl AppStoreServer {
                  they are served without safety annotations; classify them there"
             );
         }
+        let domain_tool_count = assembled.router.map.len();
+        let (tool_router, discovery_router) = if tools.discovery {
+            let mut visible = Self::discovery_router();
+            discovery::annotate(&mut visible, tools.read_only);
+            (visible, Some(assembled.router))
+        } else {
+            (assembled.router, None)
+        };
         tracing::info!(
-            served = assembled.router.map.len(),
+            served = tool_router.map.len(),
+            discoverable = domain_tool_count,
             withheld = assembled.withheld,
             read_only = tools.read_only,
+            discovery = tools.discovery,
             groups = assembled
                 .groups
                 .iter()
@@ -119,7 +151,9 @@ impl AppStoreServer {
 
         Self {
             client: Arc::new(AscClient::new(config)),
-            tool_router: assembled.router,
+            market: Arc::new(market::MarketClient::default()),
+            tool_router,
+            discovery_router,
         }
     }
 
@@ -136,7 +170,10 @@ impl AppStoreServer {
             (Group::Submission, Self::submission_router()),
             (Group::TestFlight, Self::testflight_router()),
             (Group::Provisioning, Self::provisioning_router()),
-            (Group::Assets, Self::assets_router()),
+            (
+                Group::Assets,
+                Self::assets_router() + Self::asset_library_router(),
+            ),
             (Group::Offers, Self::offers_router()),
             (Group::OfferCodes, Self::offer_codes_router()),
             (Group::Promotions, Self::promotions_router()),
@@ -144,11 +181,16 @@ impl AppStoreServer {
             (Group::Users, Self::users_router()),
             (Group::Events, Self::events_router()),
             (Group::XcodeCloud, Self::xcode_cloud_router()),
-            (Group::Analytics, Self::analytics_router()),
+            (
+                Group::Analytics,
+                Self::analytics_router() + Self::reports_router(),
+            ),
             (
                 Group::CustomProductPages,
                 Self::custom_product_pages_router(),
             ),
+            (Group::Market, Self::market_router()),
+            (Group::Webhooks, Self::webhooks_router()),
         ]
     }
 
@@ -289,7 +331,11 @@ impl ServerHandler for AppStoreServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::from_build_env())
-            .with_instructions(INSTRUCTIONS.to_string())
+            .with_instructions(if self.discovery_router.is_some() {
+                DISCOVERY_INSTRUCTIONS.to_string()
+            } else {
+                INSTRUCTIONS.to_string()
+            })
     }
 }
 

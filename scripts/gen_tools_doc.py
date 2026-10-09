@@ -15,8 +15,12 @@ from integration_test import McpClient  # noqa: E402  (reuse the stdio client)
 
 # group title -> (one-line blurb, ordered tool names) — mirrors the README table.
 GROUPS = [
-    ("Generic", "Reach any endpoint with raw JSON:API.",
-     ["appstore_request", "appstore_list"]),
+    ("Full API", "Search, describe and call any of the 1,300 operations in Apple's App Store Connect OpenAPI spec, checked against the spec before sending.",
+     ["api_search", "api_describe", "api_execute", "api_list"]),
+    ("Webhooks", "Have Apple post App Store Connect events (version state, build processing, TestFlight feedback) to your URL.",
+     ["list_webhooks", "create_webhook", "update_webhook", "delete_webhook", "list_webhook_deliveries", "create_webhook_redelivery", "create_webhook_ping"]),
+    ("Market", "Public App Store data for any app, no API key: search, listings, reviews, keyword competition, and Apple's search suggestions.",
+     ["search_store_apps", "get_store_app", "list_developer_store_apps", "list_similar_store_apps", "list_store_reviews", "analyze_store_reviews", "analyze_store_keyword", "search_suggestions"]),
     ("Apps & metadata", "Read/update apps, app-level metadata, age rating, and localized app name/subtitle.",
      ["list_apps", "get_app", "update_app", "list_app_infos", "update_app_info",
       "set_age_rating", "create_app_info_localization", "update_app_info_localization"]),
@@ -49,6 +53,8 @@ GROUPS = [
     ("Assets", "Screenshot/preview sets and uploads (reserve -> upload -> commit).",
      ["upload_app_screenshot", "upload_app_preview", "create_screenshot_set",
       "create_preview_set", "delete_screenshot_set", "delete_preview_set", "reorder_screenshots"]),
+    ("App Asset Library", "Upload images and videos once, then place them on version, custom product page, event, and treatment localizations (API 4.5.1; replaces screenshot/preview sets).",
+     ["get_app_asset_library", "list_asset_library_images", "list_asset_library_videos", "upload_asset_library_image", "upload_asset_library_video", "delete_asset_library_image", "delete_asset_library_video", "create_asset_library_placement", "list_asset_library_placements", "delete_asset_library_placement", "set_asset_library_placement_order", "list_asset_library_ref_data"]),
     ("Subscription offers", "Introductory, promotional, and win-back offers.",
      ["create_introductory_offer", "create_promotional_offer", "create_winback_offer",
       "list_winback_offers"]),
@@ -71,7 +77,8 @@ GROUPS = [
       "list_ci_build_actions"]),
     ("Analytics reports", "Request, navigate, and download App Store analytics reports.",
      ["request_analytics_report", "list_analytics_reports", "list_analytics_report_instances",
-      "list_analytics_report_segments", "download_analytics_segment"]),
+      "list_analytics_report_segments", "download_analytics_segment",
+      "download_sales_report", "download_finance_report"]),
     ("Custom product pages", "Marketing product-page variants: pages, versions, localized text, and image sets.",
      ["list_custom_product_pages", "get_custom_product_page", "create_custom_product_page",
       "update_custom_product_page", "delete_custom_product_page",
@@ -130,12 +137,12 @@ def render(tools):
     read_only = sum(1 for t in tools.values()
                     if (t.get("annotations") or {}).get("readOnlyHint"))
     out.append("# Tool reference\n")
-    out.append(f"All **{total}** tools exposed by `appstore-mcp`, grouped by domain "
+    out.append(f"All **{total}** tools exposed by `asc-mcp`, grouped by domain "
                f"({read_only} read-only). Auto-generated from the server's live `tools/list` "
                "schemas by `scripts/gen_tools_doc.py` — regenerate after changing tools.\n")
     out.append("> Required parameters are marked **yes**. IDs are opaque strings returned by the "
                "`list_*`/`get_*` tools — resolve them first. Anything not covered here is reachable "
-               "via the generic `appstore_request` / `appstore_list` tools.\n")
+               "via the generic `api_execute` / `api_list` tools.\n")
     out.append("> Each tool's badge reflects the MCP annotations it advertises, which clients use "
                "to decide what needs confirming. Set `ASC_READ_ONLY=1` to serve only the read-only "
                "tools, or `ASC_TOOLS=<groups>` to serve only some of the sections below.\n")

@@ -42,8 +42,8 @@ fn every_packaging_file_carries_the_crate_version() {
                 .into(),
         ),
         (
-            "plugins/appstore-mcp/.claude-plugin/plugin.json",
-            read_json("plugins/appstore-mcp/.claude-plugin/plugin.json")["version"]
+            "plugins/asc-mcp/.claude-plugin/plugin.json",
+            read_json("plugins/asc-mcp/.claude-plugin/plugin.json")["version"]
                 .as_str()
                 .unwrap()
                 .into(),
@@ -98,14 +98,14 @@ fn the_release_asset_url_points_at_this_version() {
 fn the_mcpb_manifest_declares_every_platform_binary_the_release_builds() {
     let manifest = read_json("packaging/mcpb/manifest.json");
     let config = &manifest["server"]["mcp_config"];
-    assert_eq!(config["command"], "server/appstore-mcp-macos");
+    assert_eq!(config["command"], "server/asc-mcp-macos");
     assert_eq!(
         config["platform_overrides"]["win32"]["command"],
-        "server/appstore-mcp-windows.exe"
+        "server/asc-mcp-windows.exe"
     );
     assert_eq!(
         config["platform_overrides"]["linux"]["command"],
-        "server/appstore-mcp-linux"
+        "server/asc-mcp-linux"
     );
 }
 

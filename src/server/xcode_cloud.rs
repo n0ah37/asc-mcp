@@ -12,9 +12,10 @@
 //!     sourceBranchOrTag since they are the minimum needed to trigger a build.
 //!
 //! The `source_branch_or_tag_id` arg is a **scmGitReference** resource ID.
-//! Callers obtain it by listing the workflow's repository git references via
-//! the generic `appstore_list` tool:
-//!   GET /v1/ciWorkflows/{id}/repository/gitReferences
+//! Callers obtain it in two `api_list` calls: the workflow's repository, then
+//! that repository's git references:
+//!   GET /v1/ciWorkflows/{id}/repository
+//!   GET /v1/scmRepositories/{id}/gitReferences
 
 use rmcp::{
     handler::server::wrapper::Parameters, model::*, schemars, tool, tool_router,
@@ -48,8 +49,8 @@ pub struct StartCiBuildArgs {
     /// The Xcode Cloud workflow ID.
     pub workflow_id: String,
     /// The scmGitReference resource ID for the branch or tag to build.
-    /// Obtain it by listing the workflow's repository git references via
-    /// GET /v1/ciWorkflows/{id}/repository/gitReferences (use appstore_list).
+    /// Obtain it with api_list: GET /v1/ciWorkflows/{id}/repository for the
+    /// repository ID, then GET /v1/scmRepositories/{id}/gitReferences.
     pub source_branch_or_tag_id: String,
 }
 
@@ -120,8 +121,9 @@ to obtain the ci_product_id."
     #[tool(
         description = "Start a new Xcode Cloud build run for a workflow on a specific branch or tag. \
 Provide the workflow_id (from list_ci_workflows) and source_branch_or_tag_id, which is a \
-scmGitReference resource ID. Obtain it by listing the workflow's repository git references with: \
-appstore_list { \"path\": \"/v1/ciWorkflows/{workflow_id}/repository/gitReferences\" }."
+scmGitReference resource ID. Obtain it with api_list: first \
+\"/v1/ciWorkflows/{workflow_id}/repository\" for the repository ID, then \
+\"/v1/scmRepositories/{repository_id}/gitReferences\"."
     )]
     async fn start_ci_build(
         &self,

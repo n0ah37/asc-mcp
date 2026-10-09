@@ -1,10 +1,10 @@
-//! `appstore-mcp` — an MCP server exposing the Apple App Store Connect API.
+//! `asc-mcp` — an MCP server exposing the Apple App Store Connect API.
 //!
 //! Communicates over stdio (JSON-RPC). All diagnostic logging goes to **stderr**;
 //! stdout is reserved for the MCP protocol.
 
 use anyhow::Context;
-use appstore_mcp::{config, server};
+use asc_mcp::{config, server};
 use rmcp::{transport::stdio, ServiceExt};
 use tracing_subscriber::EnvFilter;
 
@@ -29,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let server = server::AppStoreServer::new(config);
-    tracing::info!("starting appstore-mcp on stdio");
+    tracing::info!("starting asc-mcp on stdio");
 
     let service = server
         .serve(stdio())

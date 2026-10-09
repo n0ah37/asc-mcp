@@ -1,13 +1,19 @@
-# appstore-mcp
+# asc-mcp
 
 An [MCP](https://modelcontextprotocol.io) server, written in Rust, that exposes
 the **Apple App Store Connect API** to AI agents. It covers the full product
 lifecycle — apps & metadata, in-app purchases, subscriptions and their offers,
 pricing & availability, App Store versions, App Review submission, TestFlight,
 provisioning & signing, asset uploads, promoted purchases, customer reviews,
-phased release, users & access, in-app events, Xcode Cloud, and analytics
-reports — across **114 tools**, and can reach *any* other App Store Connect
-endpoint through two generic JSON:API tools.
+phased release, users & access, in-app events, Xcode Cloud, analytics, sales
+and finance reports, and webhooks — across **145 tools**. It embeds Apple's
+OpenAPI spec, so an agent can search, describe and call *any* of the API's
+~1,300 operations with the request checked before it is sent, and it reads the
+public App Store (any app's listing, reviews, keyword competition and Apple's
+search suggestions) with no API key.
+
+Forked from [forgeopslabs/appstore-mcp](https://github.com/forgeopslabs/appstore-mcp)
+(named `appstore-mcp` through 0.4.0).
 
 Built on the official [`rmcp`](https://crates.io/crates/rmcp) SDK over stdio.
 
@@ -25,19 +31,29 @@ The App Store Connect API has hundreds of endpoints but is uniformly
 [JSON:API](https://jsonapi.org). Rather than a tool per endpoint, this server is
 **hybrid**:
 
-- **Curated tools** (112) for the common, multi-step, or error-prone workflows —
+- **Curated tools** for the common, multi-step, or error-prone workflows —
   apps & metadata, IAPs, subscriptions & offers, versions, pricing, availability,
   App Review submission, TestFlight, provisioning, asset uploads, promoted
   purchases, customer reviews, phased release, users, in-app events, Xcode Cloud,
-  analytics reports, and custom product pages.
-- **Two generic escape-hatch tools** — `appstore_request` and `appstore_list` —
-  that can call *any* endpoint with raw JSON:API documents.
+  analytics, sales and finance reports, webhooks, and custom product pages.
+- **The full API**, the way Cloudflare's API server does it: `api_search` finds
+  an operation by words in Apple's embedded OpenAPI spec, `api_describe` shows
+  its query parameters and body, and `api_execute` calls it — after checking
+  the path, query and body against the spec, so a misspelled filter or an
+  attribute Apple does not define fails with the accepted list instead of a bare
+  4xx. `api_list` pages through any collection. Refresh the spec with
+  `scripts/update_spec.py`.
+- **Market tools** for public App Store data on any app, competitors included,
+  with no API key: search, listings, reviews and their analysis, keyword
+  competition, and Apple's own search suggestions in popularity order.
 
 ## Tools
 
 | Group | Tools |
 |------|-------|
-| **Generic** | `appstore_request`, `appstore_list` |
+| **Full API** | `api_search`, `api_describe`, `api_execute`, `api_list` |
+| **Market (public App Store)** | `search_store_apps`, `get_store_app`, `list_developer_store_apps`, `list_similar_store_apps`, `list_store_reviews`, `analyze_store_reviews`, `analyze_store_keyword`, `search_suggestions` |
+| **Webhooks** | `list_webhooks`, `create_webhook`, `update_webhook`, `delete_webhook`, `list_webhook_deliveries`, `create_webhook_redelivery`, `create_webhook_ping` |
 | **Apps & metadata** | `list_apps`, `get_app`, `update_app`, `list_app_infos`, `update_app_info`, `set_age_rating`, `create_app_info_localization`, `update_app_info_localization` |
 | **In-app purchases (v2)** | `list_in_app_purchases`, `create_in_app_purchase`, `update_in_app_purchase`, `delete_in_app_purchase`, `create_iap_localization`, `set_iap_price_schedule`, `upload_iap_review_screenshot` |
 | **Subscriptions** | `list_subscription_groups`, `create_subscription_group`, `create_subscription`, `update_subscription`, `create_subscription_localization`, `set_subscription_price` |
@@ -48,6 +64,7 @@ The App Store Connect API has hundreds of endpoints but is uniformly
 | **TestFlight** | `list_builds`, `list_beta_groups`, `create_beta_group`, `add_beta_tester`, `submit_build_for_beta_review`, `set_build_test_notes`, `set_build_beta_detail`, `set_beta_app_review_detail`, `expire_build`, `add_build_to_beta_group` |
 | **Provisioning & signing** | `list_bundle_ids`, `create_bundle_id`, `enable_bundle_id_capability`, `disable_bundle_id_capability`, `list_certificates`, `create_certificate`, `list_devices`, `register_device`, `list_profiles`, `create_profile` |
 | **Assets** | `upload_app_screenshot`, `upload_app_preview`, `create_screenshot_set`, `create_preview_set`, `delete_screenshot_set`, `delete_preview_set`, `reorder_screenshots` |
+| **App Asset Library** | `get_app_asset_library`, `list_asset_library_images`, `list_asset_library_videos`, `upload_asset_library_image`, `upload_asset_library_video`, `delete_asset_library_image`, `delete_asset_library_video`, `create_asset_library_placement`, `list_asset_library_placements`, `delete_asset_library_placement`, `set_asset_library_placement_order`, `list_asset_library_ref_data` |
 | **Subscription offers** | `create_introductory_offer`, `create_promotional_offer`, `create_winback_offer`, `list_winback_offers` |
 | **Offer codes** | `create_offer_code`, `generate_one_time_use_codes`, `create_custom_offer_code`, `list_offer_codes` |
 | **Promoted purchases** | `create_promoted_purchase`, `update_promoted_purchase`, `set_promoted_purchase_order`, `list_promoted_purchases` |
@@ -56,21 +73,29 @@ The App Store Connect API has hundreds of endpoints but is uniformly
 | **Users & access** | `list_users`, `invite_user`, `update_user`, `remove_user` |
 | **In-app events** | `create_app_event`, `create_app_event_localization`, `upload_app_event_screenshot` |
 | **Xcode Cloud** | `list_ci_products`, `list_ci_workflows`, `start_ci_build`, `get_ci_build_run`, `list_ci_build_actions` |
-| **Analytics reports** | `request_analytics_report`, `list_analytics_reports`, `list_analytics_report_instances`, `list_analytics_report_segments`, `download_analytics_segment` |
+| **Analytics reports** | `request_analytics_report`, `list_analytics_reports`, `list_analytics_report_instances`, `list_analytics_report_segments`, `download_analytics_segment`, `download_sales_report`, `download_finance_report` |
 | **Custom product pages** | `list_custom_product_pages`, `get_custom_product_page`, `create_custom_product_page`, `update_custom_product_page`, `delete_custom_product_page`, `list_custom_product_page_versions`, `create_custom_product_page_version`, `list_custom_product_page_localizations`, `create_custom_product_page_localization`, `update_custom_product_page_localization`, `create_cpp_screenshot_set`, `create_cpp_preview_set` |
 
 See **[docs/TOOLS.md](docs/TOOLS.md)** for each tool's description and parameters. Custom product page
 images are uploaded with the existing `upload_app_screenshot` / `upload_app_preview` tools.
 
+Apple deprecated screenshot sets, preview sets, and in-app event media in API 4.5.1 in favour
+of the **App Asset Library**: upload an image or video once with `upload_asset_library_image` /
+`upload_asset_library_video`, then attach it to any version, custom product page, event, or
+treatment localization with `create_asset_library_placement`. The same two steps publish the
+creative assets Apple added in October 2026: upload with category `CREATIVE_ASSETS` and place with
+`PRODUCT_PAGE_HEADER_ASSET` (the product page header) or `APP_STORE_SEARCH_RESULTS_ASSET` (the
+search result card). The set-based tools still work and remain available.
+
 ## Install
 
 Prebuilt binaries for **macOS (universal), Linux (x86-64), and Windows (x86-64)**
-are attached to every [GitHub Release](https://github.com/forgeopslabs/appstore-mcp/releases).
+are attached to every [GitHub Release](https://github.com/n0ah37/asc-mcp/releases).
 Pick the channel for your client; all of them need credentials (see [Credentials](#credentials)).
 
 ### Claude Desktop — one-click bundle
 
-Download `appstore-mcp.mcpb` from the latest release and open it with Claude Desktop
+Download `asc-mcp.mcpb` from the latest release and open it with Claude Desktop
 (**Settings → Extensions → Install Extension…**, or drag the file onto the window).
 It prompts for your **Issuer ID**, **Key ID**, and **.p8 key file**. The bundle ships
 all three platforms' binaries and selects the right one automatically.
@@ -78,45 +103,45 @@ all three platforms' binaries and selects the right one automatically.
 ### Claude Code — plugin marketplace
 
 ```text
-/plugin marketplace add forgeopslabs/appstore-mcp
-/plugin install appstore-mcp@forgeopslabs
+/plugin marketplace add n0ah37/asc-mcp
+/plugin install asc-mcp@n0ah37
 ```
 
-The plugin launches the `appstore-mcp` binary from your `PATH`, so install it first —
-download the binary for your OS from the [latest release](https://github.com/forgeopslabs/appstore-mcp/releases/latest)
-and put it on your `PATH`, or `cargo install --git https://github.com/forgeopslabs/appstore-mcp`.
+The plugin launches the `asc-mcp` binary from your `PATH`, so install it first —
+download the binary for your OS from the [latest release](https://github.com/n0ah37/asc-mcp/releases/latest)
+and put it on your `PATH`, or `cargo install --git https://github.com/n0ah37/asc-mcp`.
 Set `ASC_ISSUER_ID`, `ASC_KEY_ID`, and `ASC_PRIVATE_KEY_PATH` in the environment you start
 Claude Code from.
 
 ### Codex
 
-Codex configures MCP servers directly (no marketplace). With `appstore-mcp` on your `PATH`:
+Codex configures MCP servers directly (no marketplace). With `asc-mcp` on your `PATH`:
 
 ```bash
 codex mcp add appstore \
   --env ASC_ISSUER_ID=... --env ASC_KEY_ID=... \
   --env ASC_PRIVATE_KEY_PATH=/path/AuthKey_XXXXXX.p8 \
-  -- appstore-mcp
+  -- asc-mcp
 ```
 
 or in `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.appstore]
-command = "appstore-mcp"
+command = "asc-mcp"
 args = []
 env = { ASC_ISSUER_ID = "...", ASC_KEY_ID = "...", ASC_PRIVATE_KEY_PATH = "/path/AuthKey_XXXXXX.p8" }
 ```
 
 ### MCP Registry
 
-Published as `io.github.forgeopslabs/appstore-mcp` (metadata in
+Published as `io.github.n0ah37/asc-mcp` (metadata in
 [`server.json`](server.json)) so any MCP-aware client can discover it.
 
 ### From source
 
 ```bash
-cargo build --release    # -> target/release/appstore-mcp
+cargo build --release    # -> target/release/asc-mcp
 ```
 
 ## Credentials
@@ -148,29 +173,42 @@ one flat list can't tell a read from a delete. Two knobs fix that:
 |----------|---------|-------------|
 | `ASC_TOOLS` | all | Comma-separated tool groups to serve, or the preset `core`. |
 | `ASC_READ_ONLY` | `0` | Serve only tools that cannot modify the account. |
+| `ASC_TOOL_DISCOVERY` | `0` | Expose only `search_tools`, `get_tool_details`, and `call_discovered_tool`; filtered domain tools stay available through discovery. |
 
 ```bash
-ASC_TOOLS=core                     # 41 tools: generic, apps, versions, assets, testflight, submission
+ASC_TOOLS=core                     # 55 tools: generic (full API), apps, versions, assets, testflight, submission
 ASC_TOOLS=testflight,provisioning  # just what a build-distribution agent needs
-ASC_READ_ONLY=1                    # 35 read-only tools; writes are withheld entirely
+ASC_READ_ONLY=1                    # 54 read-only tools; writes are withheld entirely
+ASC_TOOL_DISCOVERY=1               # 3 visible tools; discover domain tools on demand
 ```
 
 Groups: `generic`, `apps`, `iap`, `subscriptions`, `versions`, `pricing`,
 `availability`, `submission`, `testflight`, `provisioning`, `assets`, `offers`,
 `offer-codes`, `promotions`, `reviews`, `users`, `events`, `xcode-cloud`,
-`analytics`, `custom-product-pages` — plus `all` and `core`. An unrecognised name
+`analytics`, `custom-product-pages`, `market`, `webhooks` — plus `all` and `core`. An unrecognised name
 is warned about on stderr and serves nothing rather than quietly falling back to
 everything.
 
-In read-only mode `appstore_request` is kept but refuses any method other than
+In read-only mode `api_execute` is kept but refuses any method other than
 `GET`, so the escape hatch still reaches endpoints without a curated tool without
 becoming a way around the restriction.
 
 Every served tool advertises MCP annotations (`readOnlyHint`, `destructiveHint`,
-`idempotentHint`), which clients use to decide what needs confirming. Nine tools
-are marked destructive: the seven `delete_*`/`remove_*` tools, `expire_build`,
-`disable_bundle_id_capability`, and `appstore_request` (which can reach any
+`idempotentHint`), which clients use to decide what needs confirming. Thirteen tools
+are marked destructive: the ten `delete_*`/`remove_*` tools, `expire_build`,
+`disable_bundle_id_capability`, and `api_execute` (which can reach any
 `DELETE` endpoint).
+
+**Discovery mode.** Search by task, inspect a matching tool's full input schema
+and safety annotations, then pass its exact name and arguments to
+`call_discovered_tool`. `ASC_TOOLS` and `ASC_READ_ONLY` filter the private
+catalog before search or execution. Direct calls to hidden tool names fail.
+This is server-side discovery: inspected schemas appear in tool results, not as
+new first-class MCP tools injected by the host.
+The generic execution tool is marked destructive whenever writes are enabled;
+hosts cannot apply distinct approval rules to each hidden tool. Inspect the
+underlying tool and approve writes before calling it. Default mode preserves
+the existing individually annotated tool surface.
 
 ## Tuning
 
@@ -207,7 +245,7 @@ smaller `limit` instead.
 ```bash
 cargo build --release
 ASC_ISSUER_ID=... ASC_KEY_ID=... ASC_PRIVATE_KEY_PATH=/path/AuthKey_XXX.p8 \
-  ./target/release/appstore-mcp
+  ./target/release/asc-mcp
 ```
 
 The server speaks MCP over **stdio**. Logs go to **stderr**; stdout is the
@@ -221,7 +259,7 @@ Example client config (e.g. Claude Desktop's `mcpServers`):
 {
   "mcpServers": {
     "appstore": {
-      "command": "/absolute/path/to/appstore-mcp/target/release/appstore-mcp",
+      "command": "/absolute/path/to/asc-mcp/target/release/asc-mcp",
       "env": {
         "ASC_ISSUER_ID": "00000000-0000-0000-0000-000000000000",
         "ASC_KEY_ID": "ABCD123456",
@@ -235,7 +273,7 @@ Example client config (e.g. Claude Desktop's `mcpServers`):
 ### Inspect with the MCP Inspector
 
 ```bash
-npx @modelcontextprotocol/inspector ./target/release/appstore-mcp
+npx @modelcontextprotocol/inspector ./target/release/asc-mcp
 ```
 
 ## Usage notes
@@ -251,7 +289,7 @@ npx @modelcontextprotocol/inspector ./target/release/appstore-mcp
   is retried on its own. Screenshots/previews require an existing
   `appScreenshotSet` / `appPreviewSet`; create those with the generic tools if
   needed.
-- **Pagination.** `appstore_list` returns one page by default. Pass
+- **Pagination.** `api_list` returns one page by default. Pass
   `max_pages` (up to 20) to follow `links.next` and merge the pages into one
   result — `meta.hasMore` tells you whether anything is left.
 - **Analytics data.** `request_analytics_report` → `list_analytics_reports` →
@@ -259,9 +297,9 @@ npx @modelcontextprotocol/inspector ./target/release/appstore-mcp
   presigned segment URL; `download_analytics_segment` fetches it, gunzips it, and
   returns the rows as JSON. Apple can take up to 48 hours to generate the first
   report for a new request.
-- **Anything not listed** is reachable via `appstore_request` (raw method + path +
-  JSON:API body) or `appstore_list` (paginated GET). Example:
-  `appstore_request { "method": "GET", "path": "/v1/apps/123/customerReviews" }`.
+- **Anything not listed** is reachable via `api_execute` (raw method + path +
+  JSON:API body) or `api_list` (paginated GET). Example:
+  `api_execute { "method": "GET", "path": "/v1/apps/123/customerReviews" }`.
 - **Not covered:** sales/finance report endpoints return gzipped TSV (not JSON:API)
   and are out of scope for these tools.
 

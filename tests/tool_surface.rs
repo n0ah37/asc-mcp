@@ -5,9 +5,9 @@
 //! matters is that every tool a client sees is well-formed, honestly labelled,
 //! and that the configuration knobs really withhold what they claim to.
 
-use appstore_mcp::config::{Config, ToolsConfig};
-use appstore_mcp::server::catalog::{classify, Effect, Group};
-use appstore_mcp::server::AppStoreServer;
+use asc_mcp::config::{Config, ToolsConfig};
+use asc_mcp::server::catalog::{classify, Effect, Group};
+use asc_mcp::server::AppStoreServer;
 use rmcp::model::Tool;
 
 fn server_with(tools: ToolsConfig) -> AppStoreServer {
@@ -115,12 +115,16 @@ fn exactly_the_expected_tools_are_marked_destructive() {
     assert_eq!(
         destructive,
         vec![
-            "appstore_request", // can reach every DELETE endpoint Apple has
+            "api_execute", // can reach every DELETE endpoint Apple has
+            "delete_asset_library_image",
+            "delete_asset_library_placement",
+            "delete_asset_library_video",
             "delete_custom_product_page",
             "delete_in_app_purchase",
             "delete_preview_set",
             "delete_review_response",
             "delete_screenshot_set",
+            "delete_webhook",
             "disable_bundle_id_capability",
             "expire_build",
             "remove_user",
@@ -133,6 +137,7 @@ fn asc_tools_serves_only_the_groups_asked_for() {
     let filtered = server_with(ToolsConfig {
         read_only: false,
         groups: Some("testflight".into()),
+        discovery: false,
     });
     let served = names(&filtered.tools());
 
@@ -143,7 +148,7 @@ fn asc_tools_serves_only_the_groups_asked_for() {
         "an unrequested group leaked in: {served:?}"
     );
     assert!(
-        !served.contains(&"appstore_request".to_string()),
+        !served.contains(&"api_execute".to_string()),
         "the escape hatch is a group like any other"
     );
     assert!(served.len() < full_server().tools().len());
@@ -154,11 +159,12 @@ fn the_core_preset_covers_shipping_an_app() {
     let core = server_with(ToolsConfig {
         read_only: false,
         groups: Some("core".into()),
+        discovery: false,
     });
     let served = names(&core.tools());
 
     for expected in [
-        "appstore_request",
+        "api_execute",
         "list_apps",
         "create_app_store_version",
         "upload_app_screenshot",
@@ -178,6 +184,7 @@ fn an_unrecognised_group_serves_nothing_rather_than_everything() {
     let typo = server_with(ToolsConfig {
         read_only: false,
         groups: Some("testflightt".into()),
+        discovery: false,
     });
     assert!(typo.tools().is_empty());
 }
@@ -187,6 +194,7 @@ fn read_only_mode_withholds_every_tool_that_could_write() {
     let read_only = server_with(ToolsConfig {
         read_only: true,
         groups: None,
+        discovery: false,
     });
     let tools = read_only.tools();
 
@@ -217,7 +225,7 @@ fn read_only_mode_withholds_every_tool_that_could_write() {
     }
     // Reads and the (GET-restricted) escape hatch remain.
     assert!(served.contains(&"list_apps".to_string()));
-    assert!(served.contains(&"appstore_request".to_string()));
+    assert!(served.contains(&"api_execute".to_string()));
     assert!(served.contains(&"download_analytics_segment".to_string()));
 }
 
@@ -226,7 +234,46 @@ fn read_only_mode_composes_with_group_filtering() {
     let both = server_with(ToolsConfig {
         read_only: true,
         groups: Some("users".into()),
+        discovery: false,
     });
     let served = names(&both.tools());
     assert_eq!(served, vec!["list_users"]);
+}
+
+#[test]
+fn discovery_mode_exposes_only_three_conservatively_annotated_tools() {
+    let server = server_with(ToolsConfig {
+        discovery: true,
+        ..ToolsConfig::default()
+    });
+    let tools = server.tools();
+    assert!(tools.iter().all(|tool| classify(&tool.name).is_some()));
+    assert_eq!(
+        names(&tools),
+        vec!["call_discovered_tool", "get_tool_details", "search_tools"]
+    );
+    let call = &tools[0];
+    let hints = call.annotations.as_ref().unwrap();
+    assert_eq!(hints.read_only_hint, Some(false));
+    assert_eq!(hints.destructive_hint, Some(true));
+    assert_eq!(hints.idempotent_hint, Some(false));
+    for tool in &tools[1..] {
+        assert_eq!(
+            tool.annotations.as_ref().unwrap().read_only_hint,
+            Some(true)
+        );
+    }
+}
+
+#[test]
+fn discovery_mode_marks_execution_read_only_when_server_is_read_only() {
+    let server = server_with(ToolsConfig {
+        read_only: true,
+        discovery: true,
+        ..ToolsConfig::default()
+    });
+    let call = &server.tools()[0];
+    let hints = call.annotations.as_ref().unwrap();
+    assert_eq!(hints.read_only_hint, Some(true));
+    assert_eq!(hints.destructive_hint, Some(false));
 }
