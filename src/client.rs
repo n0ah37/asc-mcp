@@ -990,5 +990,38 @@ mod tests {
                 .unwrap_err();
             assert!(matches!(err, AscError::InvalidRequest(_)), "{err:?}");
         }
+
+        #[tokio::test]
+        async fn a_hostile_absolute_url_is_refused_before_a_token_is_sent() {
+            // Two live servers: the configured API, and a host a caller names.
+            // The credentials sign, so if validation ran after token creation
+            // or dispatch, the hostile server would see a request.
+            let api = MockServer::start().await;
+            let hostile = MockServer::start().await;
+            for server in [&api, &hostile] {
+                Mock::given(wiremock::matchers::any())
+                    .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [] })))
+                    .expect(0)
+                    .mount(server)
+                    .await;
+            }
+            let client = test_client(&api.uri());
+            let target = format!("{}/v1/apps?cursor=x", hostile.uri());
+
+            let err = client.get(&target, &[]).await.unwrap_err();
+            assert!(matches!(err, AscError::InvalidRequest(_)), "{err:?}");
+
+            let err = client
+                .request(Method::POST, &target, &[], Some(json!({ "data": {} })))
+                .await
+                .unwrap_err();
+            assert!(matches!(err, AscError::InvalidRequest(_)), "{err:?}");
+
+            assert!(
+                hostile.received_requests().await.unwrap().is_empty(),
+                "the hostile host was contacted"
+            );
+            assert!(api.received_requests().await.unwrap().is_empty());
+        }
     }
 }
