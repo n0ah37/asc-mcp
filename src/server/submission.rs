@@ -54,10 +54,9 @@ impl ReviewItemKind {
                 "appCustomProductPageVersion",
                 "appCustomProductPageVersions",
             ),
-            ReviewItemKind::AppStoreVersionExperiment => (
-                "appStoreVersionExperimentV2",
-                "appStoreVersionExperiments",
-            ),
+            ReviewItemKind::AppStoreVersionExperiment => {
+                ("appStoreVersionExperimentV2", "appStoreVersionExperiments")
+            }
             ReviewItemKind::AppAssetLibraryImage => {
                 ("appAssetLibraryImage", "appAssetLibraryImages")
             }
@@ -474,14 +473,26 @@ mod tests {
     fn review_item_kinds_match_apples_relationship_names() {
         // Keys and types from ReviewSubmissionItemCreateRequest in the 4.5.1 spec.
         for (kind, key, ty) in [
-            (ReviewItemKind::InAppPurchaseVersion, "inAppPurchaseVersion", "inAppPurchaseVersions"),
-            (ReviewItemKind::SubscriptionVersion, "subscriptionVersion", "subscriptionVersions"),
+            (
+                ReviewItemKind::InAppPurchaseVersion,
+                "inAppPurchaseVersion",
+                "inAppPurchaseVersions",
+            ),
+            (
+                ReviewItemKind::SubscriptionVersion,
+                "subscriptionVersion",
+                "subscriptionVersions",
+            ),
             (
                 ReviewItemKind::AppStoreVersionExperiment,
                 "appStoreVersionExperimentV2",
                 "appStoreVersionExperiments",
             ),
-            (ReviewItemKind::AppAssetLibraryImage, "appAssetLibraryImage", "appAssetLibraryImages"),
+            (
+                ReviewItemKind::AppAssetLibraryImage,
+                "appAssetLibraryImage",
+                "appAssetLibraryImages",
+            ),
         ] {
             let b = review_item_body("sub-1", kind, "x-1");
             assert_eq!(b["data"]["relationships"][key]["data"]["type"], ty);

@@ -7,8 +7,8 @@ use rmcp::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::error::AscError;
 use super::{de_coerce_json, push_opt, set_opt_str, AppStoreServer};
+use crate::error::AscError;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ListAppsArgs {

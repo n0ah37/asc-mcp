@@ -17,6 +17,7 @@ mod discovery;
 mod events;
 mod generic;
 mod iap;
+pub(crate) mod market;
 mod offer_codes;
 mod offers;
 mod pricing;
@@ -96,6 +97,8 @@ ASC_PRIVATE_KEY_PATH. A _truncated response means narrow the request.";
 #[derive(Clone)]
 pub struct AppStoreServer {
     pub(crate) client: Arc<AscClient>,
+    /// Public App Store endpoints, which need no API key (see [`market`]).
+    pub(crate) market: Arc<market::MarketClient>,
     tool_router: ToolRouter<AppStoreServer>,
     discovery_router: Option<ToolRouter<AppStoreServer>>,
 }
@@ -142,6 +145,7 @@ impl AppStoreServer {
 
         Self {
             client: Arc::new(AscClient::new(config)),
+            market: Arc::new(market::MarketClient::default()),
             tool_router,
             discovery_router,
         }
@@ -176,6 +180,7 @@ impl AppStoreServer {
                 Group::CustomProductPages,
                 Self::custom_product_pages_router(),
             ),
+            (Group::Market, Self::market_router()),
         ]
     }
 

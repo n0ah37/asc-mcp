@@ -148,10 +148,7 @@ pub fn search(query: &str, method: Option<&str>, limit: usize) -> Vec<&'static O
             for term in &terms {
                 let mut hit = 0i64;
                 // The last path segment names what the operation returns.
-                if path_words
-                    .last()
-                    .is_some_and(|w| word_matches(term, w))
-                {
+                if path_words.last().is_some_and(|w| word_matches(term, w)) {
                     hit = hit.max(6);
                 }
                 if path_words.iter().any(|w| word_matches(term, w)) {
@@ -229,9 +226,9 @@ fn template_matches(template: &str, path: &str) -> bool {
     let t: Vec<&str> = template.split('/').collect();
     let p: Vec<&str> = path.split('/').collect();
     t.len() == p.len()
-        && t.iter().zip(&p).all(|(t, p)| {
-            (t.starts_with('{') && t.ends_with('}') && !p.is_empty()) || t == p
-        })
+        && t.iter()
+            .zip(&p)
+            .all(|(t, p)| (t.starts_with('{') && t.ends_with('}') && !p.is_empty()) || t == p)
 }
 
 /// Find the operation for `method` + a concrete or templated path.
@@ -478,7 +475,10 @@ mod tests {
 
     #[test]
     fn words_split_camel_case_and_paths() {
-        assert_eq!(words("appStoreVersions_get"), ["app", "store", "versions", "get"]);
+        assert_eq!(
+            words("appStoreVersions_get"),
+            ["app", "store", "versions", "get"]
+        );
         assert_eq!(words("/v1/apps/{id}"), ["v1", "apps", "id"]);
     }
 
@@ -523,9 +523,15 @@ mod tests {
         }});
         let problems = check_body(op, Some(&body));
         let joined = problems.join("\n");
-        assert!(joined.contains("/data/attributes/gambling: expected boolean"), "{joined}");
+        assert!(
+            joined.contains("/data/attributes/gambling: expected boolean"),
+            "{joined}"
+        );
         assert!(joined.contains("SOMETIMES"), "{joined}");
-        assert!(joined.contains("/data/attributes/madeUp: not defined"), "{joined}");
+        assert!(
+            joined.contains("/data/attributes/madeUp: not defined"),
+            "{joined}"
+        );
 
         let good = json!({ "data": {
             "type": "ageRatingDeclarations", "id": "1",

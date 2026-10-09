@@ -7,8 +7,8 @@ use rmcp::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::error::AscError;
 use super::{de_coerce_json, push_opt, AppStoreServer};
+use crate::error::AscError;
 
 /// Renewal period of a subscription.
 #[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
@@ -282,7 +282,13 @@ impl AppStoreServer {
     /// availability with a bare "error processing the pricing information".
     /// When that is the cause, say so and name the fix.
     async fn explain_price_failure(&self, subscription_id: &str, err: AscError) -> AscError {
-        if !matches!(err, AscError::Api { status: 409 | 422, .. }) {
+        if !matches!(
+            err,
+            AscError::Api {
+                status: 409 | 422,
+                ..
+            }
+        ) {
             return err;
         }
         let path = format!("/v1/subscriptions/{subscription_id}/subscriptionAvailability");
@@ -314,11 +320,13 @@ mod tests {
         let mock = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/v1/subscriptionPrices"))
-            .respond_with(ResponseTemplate::new(409).set_body_json(json!({ "errors": [{
-                "status": "409", "code": "ENTITY_ERROR.RELATIONSHIP.INVALID",
-                "title": "There is a problem with the request entity",
-                "detail": "An error occurred while processing the pricing information."
-            }]})))
+            .respond_with(
+                ResponseTemplate::new(409).set_body_json(json!({ "errors": [{
+                    "status": "409", "code": "ENTITY_ERROR.RELATIONSHIP.INVALID",
+                    "title": "There is a problem with the request entity",
+                    "detail": "An error occurred while processing the pricing information."
+                }]})),
+            )
             .mount(&mock)
             .await;
         Mock::given(method("GET"))
@@ -338,6 +346,10 @@ mod tests {
             }))
             .await
             .unwrap_err();
-        assert!(err.message.contains("set_subscription_availability"), "{}", err.message);
+        assert!(
+            err.message.contains("set_subscription_availability"),
+            "{}",
+            err.message
+        );
     }
 }

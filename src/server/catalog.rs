@@ -52,10 +52,11 @@ pub enum Group {
     XcodeCloud,
     Analytics,
     CustomProductPages,
+    Market,
 }
 
 impl Group {
-    pub const ALL: [Group; 20] = [
+    pub const ALL: [Group; 21] = [
         Group::Generic,
         Group::Apps,
         Group::Iap,
@@ -76,6 +77,7 @@ impl Group {
         Group::XcodeCloud,
         Group::Analytics,
         Group::CustomProductPages,
+        Group::Market,
     ];
 
     /// The everyday ship-an-app subset, for `ASC_TOOLS=core`.
@@ -110,6 +112,7 @@ impl Group {
             Group::XcodeCloud => "xcode-cloud",
             Group::Analytics => "analytics",
             Group::CustomProductPages => "custom-product-pages",
+            Group::Market => "market",
         }
     }
 
@@ -186,6 +189,8 @@ const VERBS: &[(&str, Effect)] = &[
     ("request_", Effect::Create),
     ("respond_", Effect::Create),
     ("download_", Effect::Read),
+    ("search_", Effect::Read),
+    ("analyze_", Effect::Read),
     // Setting named fields to given values.
     ("update_", Effect::Update),
     ("set_", Effect::Update),
