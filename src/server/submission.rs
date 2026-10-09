@@ -27,6 +27,21 @@ pub enum ReviewItemKind {
     AppEvent,
     /// A custom product page version.
     AppCustomProductPageVersion,
+    /// A product page optimization test (a v2 App Store version experiment).
+    AppStoreVersionExperiment,
+    /// An App Asset Library image (creative assets such as product page headers
+    /// and search result assets are reviewed on their own).
+    AppAssetLibraryImage,
+    /// An App Asset Library video.
+    AppAssetLibraryVideo,
+    /// An in-app purchase version (API 4.4.1+: IAP metadata is versioned).
+    InAppPurchaseVersion,
+    /// A subscription version.
+    SubscriptionVersion,
+    /// A subscription group version.
+    SubscriptionGroupVersion,
+    /// A background asset version.
+    BackgroundAssetVersion,
 }
 
 impl ReviewItemKind {
@@ -39,6 +54,26 @@ impl ReviewItemKind {
                 "appCustomProductPageVersion",
                 "appCustomProductPageVersions",
             ),
+            ReviewItemKind::AppStoreVersionExperiment => (
+                "appStoreVersionExperimentV2",
+                "appStoreVersionExperiments",
+            ),
+            ReviewItemKind::AppAssetLibraryImage => {
+                ("appAssetLibraryImage", "appAssetLibraryImages")
+            }
+            ReviewItemKind::AppAssetLibraryVideo => {
+                ("appAssetLibraryVideo", "appAssetLibraryVideos")
+            }
+            ReviewItemKind::InAppPurchaseVersion => {
+                ("inAppPurchaseVersion", "inAppPurchaseVersions")
+            }
+            ReviewItemKind::SubscriptionVersion => ("subscriptionVersion", "subscriptionVersions"),
+            ReviewItemKind::SubscriptionGroupVersion => {
+                ("subscriptionGroupVersion", "subscriptionGroupVersions")
+            }
+            ReviewItemKind::BackgroundAssetVersion => {
+                ("backgroundAssetVersion", "backgroundAssetVersions")
+            }
         }
     }
 }
@@ -57,7 +92,7 @@ pub struct AddReviewItemArgs {
     pub review_submission_id: String,
     /// What kind of item to attach.
     pub item_kind: ReviewItemKind,
-    /// The ID of the version/event being submitted.
+    /// The ID of the item being submitted (for in-app purchases and subscriptions, the version ID).
     pub item_id: String,
 }
 
@@ -154,9 +189,13 @@ with add_review_submission_item and submit with submit_review_submission."
         self.ok_json(value)
     }
 
-    /// Attach an item (version or event) to a review submission.
+    /// Attach an item to a review submission.
     #[tool(
-        description = "Attach an App Store version or in-app event to an open review submission."
+        description = "Attach an item to an open review submission: an App Store version, in-app \
+event, custom product page version, product page optimization test, App Asset Library image or \
+video, in-app purchase version, subscription version, subscription group version, or background \
+asset version. In-app purchases and subscriptions are submitted as their versions (API 4.4.1+), \
+not as the product itself."
     )]
     async fn add_review_submission_item(
         &self,
@@ -429,6 +468,24 @@ mod tests {
         assert_eq!(rels["appStoreVersion"]["data"]["id"], "ver-9");
         // The event relationship key must NOT be present for a version item.
         assert!(rels.get("appEvent").is_none());
+    }
+
+    #[test]
+    fn review_item_kinds_match_apples_relationship_names() {
+        // Keys and types from ReviewSubmissionItemCreateRequest in the 4.5.1 spec.
+        for (kind, key, ty) in [
+            (ReviewItemKind::InAppPurchaseVersion, "inAppPurchaseVersion", "inAppPurchaseVersions"),
+            (ReviewItemKind::SubscriptionVersion, "subscriptionVersion", "subscriptionVersions"),
+            (
+                ReviewItemKind::AppStoreVersionExperiment,
+                "appStoreVersionExperimentV2",
+                "appStoreVersionExperiments",
+            ),
+            (ReviewItemKind::AppAssetLibraryImage, "appAssetLibraryImage", "appAssetLibraryImages"),
+        ] {
+            let b = review_item_body("sub-1", kind, "x-1");
+            assert_eq!(b["data"]["relationships"][key]["data"]["type"], ty);
+        }
     }
 
     #[test]

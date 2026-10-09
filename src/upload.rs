@@ -66,9 +66,10 @@ impl AscClient {
         .await
     }
 
-    /// The same flow for App Asset Library images and videos, whose commit is
-    /// `{ uploaded: true }` with no checksum.
-    pub async fn upload_library_asset(
+    /// The same flow for resources whose commit accepts no checksum and rejects
+    /// one: App Asset Library images and videos, and app event screenshots and
+    /// video clips (`{ uploaded: true }` only).
+    pub async fn upload_asset_without_checksum(
         &self,
         collection_path: &str,
         resource_type: &str,
@@ -518,7 +519,7 @@ mod tests {
 
             let file = temp_file("upload-library", CONTENT);
             test_client(&server.uri())
-                .upload_library_asset(
+                .upload_asset_without_checksum(
                     "/v1/appAssetLibraryImages",
                     "appAssetLibraryImages",
                     json!({ "category": "APP_SCREENSHOTS_AND_PREVIEWS" }),

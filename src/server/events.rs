@@ -185,7 +185,7 @@ commit with MD5 verification). Provide the app_event_localization_id, app_event_
     ) -> Result<CallToolResult, McpError> {
         let value = self
             .client
-            .upload_asset(
+            .upload_asset_without_checksum(
                 "/v1/appEventScreenshots",
                 "appEventScreenshots",
                 json!({ "appEventAssetType": args.app_event_asset_type.as_api() }),

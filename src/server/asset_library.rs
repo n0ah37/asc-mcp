@@ -289,7 +289,7 @@ place it on a localization with create_asset_library_placement."
         let attrs = library_asset_attributes(&args.category, &args.reference_name, &None);
         let value = self
             .client
-            .upload_library_asset(
+            .upload_asset_without_checksum(
                 "/v1/appAssetLibraryImages",
                 "appAssetLibraryImages",
                 attrs,
@@ -317,7 +317,7 @@ upload → commit). Then place it on a localization with create_asset_library_pl
         );
         let value = self
             .client
-            .upload_library_asset(
+            .upload_asset_without_checksum(
                 "/v1/appAssetLibraryVideos",
                 "appAssetLibraryVideos",
                 attrs,

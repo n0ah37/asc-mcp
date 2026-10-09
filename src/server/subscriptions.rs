@@ -7,6 +7,7 @@ use rmcp::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+use crate::error::AscError;
 use super::{de_coerce_json, push_opt, AppStoreServer};
 
 /// Renewal period of a subscription.
@@ -267,11 +268,76 @@ price_point_id with list_subscription_price_points). Defaults to territory USA."
                 }
             }
         });
-        let value = self
-            .client
-            .post("/v1/subscriptionPrices", body)
+        match self.client.post("/v1/subscriptionPrices", body).await {
+            Ok(value) => self.ok_json(value),
+            Err(err) => Err(AppStoreServer::map_err(
+                self.explain_price_failure(&args.subscription_id, err).await,
+            )),
+        }
+    }
+}
+
+impl AppStoreServer {
+    /// Apple answers a price set on a subscription with no territory
+    /// availability with a bare "error processing the pricing information".
+    /// When that is the cause, say so and name the fix.
+    async fn explain_price_failure(&self, subscription_id: &str, err: AscError) -> AscError {
+        if !matches!(err, AscError::Api { status: 409 | 422, .. }) {
+            return err;
+        }
+        let path = format!("/v1/subscriptions/{subscription_id}/subscriptionAvailability");
+        match self.client.get(&path, &[]).await {
+            Ok(v) if !v["data"].is_null() => AscError::InvalidRequest(format!(
+                "Apple rejected the price. The subscription has territory availability, so check \
+that price_point_id came from list_subscription_price_points for this subscription and \
+territory. Apple's error was: {err}"
+            )),
+            Ok(_) | Err(AscError::Api { status: 404, .. }) => AscError::InvalidRequest(format!(
+                "subscription {subscription_id} has no territory availability yet, and Apple \
+rejects a price until it does. Call set_subscription_availability first, then set the price \
+again. Apple's error was: {err}"
+            )),
+            Err(_) => err,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::test_server;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn a_price_rejected_for_missing_availability_names_the_fix() {
+        let mock = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/subscriptionPrices"))
+            .respond_with(ResponseTemplate::new(409).set_body_json(json!({ "errors": [{
+                "status": "409", "code": "ENTITY_ERROR.RELATIONSHIP.INVALID",
+                "title": "There is a problem with the request entity",
+                "detail": "An error occurred while processing the pricing information."
+            }]})))
+            .mount(&mock)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/subscriptions/sub-1/subscriptionAvailability"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": null })))
+            .expect(1)
+            .mount(&mock)
+            .await;
+
+        let err = test_server(&mock.uri())
+            .set_subscription_price(Parameters(SetSubPriceArgs {
+                subscription_id: "sub-1".into(),
+                price_point_id: "pp-1".into(),
+                territory: None,
+                start_date: None,
+                preserve_current_price: None,
+            }))
             .await
-            .map_err(AppStoreServer::map_err)?;
-        self.ok_json(value)
+            .unwrap_err();
+        assert!(err.message.contains("set_subscription_availability"), "{}", err.message);
     }
 }
