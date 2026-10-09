@@ -2,7 +2,7 @@
 
 All **126** tools exposed by `appstore-mcp`, grouped by domain (39 read-only). Auto-generated from the server's live `tools/list` schemas by `scripts/gen_tools_doc.py` — regenerate after changing tools.
 
-> Required parameters are marked **yes**. IDs are opaque strings returned by the `list_*`/`get_*` tools — resolve them first. Anything not covered here is reachable via the generic `appstore_request` / `appstore_list` tools.
+> Required parameters are marked **yes**. IDs are opaque strings returned by the `list_*`/`get_*` tools — resolve them first. Anything not covered here is reachable via the generic `api_execute` / `api_list` tools.
 
 > Each tool's badge reflects the MCP annotations it advertises, which clients use to decide what needs confirming. Set `ASC_READ_ONLY=1` to serve only the read-only tools, or `ASC_TOOLS=<groups>` to serve only some of the sections below.
 
@@ -35,7 +35,7 @@ All **126** tools exposed by `appstore-mcp`, grouped by domain (39 read-only). A
 
 Reach any endpoint with raw JSON:API.
 
-### `appstore_request`
+### `api_execute`
 
 🔴 **Destructive** — removes or invalidates something.
 
@@ -48,7 +48,7 @@ Make a raw authenticated request to ANY App Store Connect API endpoint (method +
 | `body` | object | no | Optional JSON:API request body for POST/PATCH/PUT — the full document, e.g. {"data": {"type": "apps", "id": "123", "attributes": {...}}}. |
 | `query` | object | no | Optional query parameters, e.g. {"filter[bundleId]": "com.example.app", "limit": 50}. Array values are comma-joined. |
 
-### `appstore_list`
+### `api_list`
 
 🟢 **Read-only** — safe to call without confirmation.
 
@@ -639,7 +639,7 @@ Submit a build for TestFlight beta app review (required before external testing)
 
 🟡 **Writes** — sets fields; calling it twice leaves the same state.
 
-Set the TestFlight 'What's New' test notes for a build in a specific locale (creates a betaBuildLocalization). locale is required (e.g. "en-US"); whats_new is the tester-facing 'What to Test' text shown in the TestFlight app. To update an existing localization instead of creating one, use appstore_request with PATCH /v1/betaBuildLocalizations/{id}.
+Set the TestFlight 'What's New' test notes for a build in a specific locale (creates a betaBuildLocalization). locale is required (e.g. "en-US"); whats_new is the tester-facing 'What to Test' text shown in the TestFlight app. To update an existing localization instead of creating one, use api_execute with PATCH /v1/betaBuildLocalizations/{id}.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -1424,11 +1424,11 @@ List all CI workflows for a given Xcode Cloud product. Use list_ci_products to o
 
 🟡 **Writes** — creates something new; calling it twice creates two.
 
-Start a new Xcode Cloud build run for a workflow on a specific branch or tag. Provide the workflow_id (from list_ci_workflows) and source_branch_or_tag_id, which is a scmGitReference resource ID. Obtain it by listing the workflow's repository git references with: appstore_list { "path": "/v1/ciWorkflows/{workflow_id}/repository/gitReferences" }.
+Start a new Xcode Cloud build run for a workflow on a specific branch or tag. Provide the workflow_id (from list_ci_workflows) and source_branch_or_tag_id, which is a scmGitReference resource ID. Obtain it by listing the workflow's repository git references with: api_list { "path": "/v1/ciWorkflows/{workflow_id}/repository/gitReferences" }.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `source_branch_or_tag_id` | string | **yes** | The scmGitReference resource ID for the branch or tag to build. Obtain it by listing the workflow's repository git references via GET /v1/ciWorkflows/{id}/repository/gitReferences (use appstore_list). |
+| `source_branch_or_tag_id` | string | **yes** | The scmGitReference resource ID for the branch or tag to build. Obtain it by listing the workflow's repository git references via GET /v1/ciWorkflows/{id}/repository/gitReferences (use api_list). |
 | `workflow_id` | string | **yes** | The Xcode Cloud workflow ID. |
 
 ### `get_ci_build_run`

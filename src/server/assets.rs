@@ -3,7 +3,7 @@
 //! Both reuse the reserve → upload → commit workflow in `crate::upload`. The
 //! caller supplies the target *set* ID (an `appScreenshotSet`/`appPreviewSet`),
 //! which is created against a version localization beforehand (use the generic
-//! tools or `appstore_request` to create the set if needed).
+//! tools or `api_execute` to create the set if needed).
 
 use rmcp::{
     handler::server::wrapper::Parameters, model::*, schemars, tool, tool_router,

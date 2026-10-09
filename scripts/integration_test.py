@@ -200,13 +200,13 @@ def read_only_sweep(mc, app, rep):
         ("list_builds", {"app_id": app}), ("list_beta_groups", {"app_id": app}),
         ("list_bundle_ids", {}), ("list_certificates", {}), ("list_devices", {}),
         ("list_profiles", {}), ("list_review_submissions", {"app_id": app}),
-        ("appstore_list", {"path": "/v1/apps", "limit": 1}),
-        ("appstore_request", {"method": "GET", "path": f"/v1/apps/{app}"}),
+        ("api_list", {"path": "/v1/apps", "limit": 1}),
+        ("api_execute", {"method": "GET", "path": f"/v1/apps/{app}"}),
     ]:
         rep.add(tool, *_simple(mc, tool, args))
 
     # Error path: a bad endpoint should surface a clean API error (PASS = it errored).
-    ok, v = mc.call("appstore_request", {"method": "GET", "path": "/v1/thisDoesNotExist"})
+    ok, v = mc.call("api_execute", {"method": "GET", "path": "/v1/thisDoesNotExist"})
     rep.add("error-path (404)", (not ok), f"surfaced: {str(v)[:80]}" if not ok else "UNEXPECTED success")
 
     if subscription_id:

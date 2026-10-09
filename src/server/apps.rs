@@ -7,6 +7,7 @@ use rmcp::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+use crate::error::AscError;
 use super::{de_coerce_json, push_opt, set_opt_str, AppStoreServer};
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -197,15 +198,29 @@ age-rating relationships for the app."
     /// Set the age-rating questionnaire answers.
     #[tool(
         description = "Set an app's age-rating questionnaire answers (required before submission). \
-Pass the ageRatingDeclaration ID and the questionnaire attributes. Enum values are typically \
-NONE / INFREQUENT_OR_MILD / FREQUENT_OR_INTENSE, plus booleans for items like gambling and \
-unrestrictedWebAccess."
+Pass the ageRatingDeclaration ID (from the app info) and the attributes to change. Booleans: \
+advertising, ageAssurance, gambling, healthOrWellnessTopics, lootBox, messagingAndChat, \
+parentalControls, socialMedia, socialMediaAgeRestricted, unrestrictedWebAccess, \
+userGeneratedContent. Frequency answers (NONE / INFREQUENT_OR_MILD / FREQUENT_OR_INTENSE): \
+alcoholTobaccoOrDrugUseOrReferences, contests, gamblingSimulated, gunsOrOtherWeapons, \
+horrorOrFearThemes, matureOrSuggestiveThemes, medicalOrTreatmentInformation, \
+profanityOrCrudeHumor, sexualContentGraphicAndNudity, sexualContentOrNudity, \
+violenceCartoonOrFantasy, violenceRealistic, violenceRealisticProlongedGraphicOrSadistic. \
+Also kidsAgeBand, ageRatingOverrideV2, koreaAgeRatingOverride, developerAgeRatingInfoUrl. \
+Answers are checked against Apple's spec before sending."
     )]
     async fn set_age_rating(
         &self,
         Parameters(args): Parameters<SetAgeRatingArgs>,
     ) -> Result<CallToolResult, McpError> {
         let body = age_rating_body(&args.age_rating_declaration_id, args.attributes);
+        let problems = crate::spec::validate_named("AgeRatingDeclarationUpdateRequest", &body);
+        if !problems.is_empty() {
+            return Err(AppStoreServer::map_err(AscError::InvalidRequest(format!(
+                "age rating answers do not match Apple's questionnaire:\n- {}",
+                problems.join("\n- ")
+            ))));
+        }
         let value = self
             .client
             .patch(

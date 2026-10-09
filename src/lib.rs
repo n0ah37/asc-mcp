@@ -24,6 +24,7 @@ pub mod json;
 pub mod report;
 pub mod retry;
 pub mod server;
+pub mod spec;
 pub mod upload;
 
 #[cfg(test)]

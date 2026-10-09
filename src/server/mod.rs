@@ -59,7 +59,7 @@ Coverage is hybrid:
   provisioning & bundle-ID capabilities, asset uploads, promoted purchases, \
   customer reviews, phased release, users & access, in-app events, Xcode Cloud, \
   and Analytics reports.
-- The generic tools `appstore_request` and `appstore_list` can reach ANY App \
+- The generic tools `api_execute` and `api_list` can reach ANY App \
   Store Connect endpoint (Game Center, App Clips, finance reports, etc.) using \
   raw JSON:API documents — use them for anything without a dedicated tool.
 
@@ -68,7 +68,7 @@ Tips:
 - Pricing requires a price-point ID: use the pricing tools to look them up.
 - Most write operations use JSON:API bodies of the form \
   {\"data\": {\"type\": ..., \"attributes\": {...}, \"relationships\": {...}}}.
-- `appstore_list` can walk pages for you: pass `max_pages` instead of calling it \
+- `api_list` can walk pages for you: pass `max_pages` instead of calling it \
   again with each `cursor`.
 - Responses are trimmed to fit a context budget. A `_truncated` key means items \
   were dropped — narrow the query with `limit`/`filter[...]`/`fields[...]` rather \

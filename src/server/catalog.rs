@@ -197,8 +197,9 @@ const VERBS: &[(&str, Effect)] = &[
 /// Classify a tool by name, or return `None` if its verb isn't recognised.
 pub fn classify(name: &str) -> Option<Effect> {
     match name {
-        "appstore_request" => Some(Effect::MethodDependent),
-        "appstore_list" => Some(Effect::Read),
+        "api_execute" => Some(Effect::MethodDependent),
+        "api_list" => Some(Effect::Read),
+        "api_search" | "api_describe" => Some(Effect::Read),
         "search_tools" => Some(Effect::Read),
         "call_discovered_tool" => Some(Effect::MethodDependent),
         _ => VERBS
@@ -320,7 +321,7 @@ mod tests {
 
     #[test]
     fn read_verbs_are_read_only() {
-        for name in ["list_apps", "get_app", "appstore_list", "download_report"] {
+        for name in ["list_apps", "get_app", "api_list", "download_report"] {
             assert_eq!(classify(name), Some(Effect::Read), "{name}");
         }
     }

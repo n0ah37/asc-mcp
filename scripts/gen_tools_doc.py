@@ -16,7 +16,7 @@ from integration_test import McpClient  # noqa: E402  (reuse the stdio client)
 # group title -> (one-line blurb, ordered tool names) — mirrors the README table.
 GROUPS = [
     ("Generic", "Reach any endpoint with raw JSON:API.",
-     ["appstore_request", "appstore_list"]),
+     ["api_execute", "api_list"]),
     ("Apps & metadata", "Read/update apps, app-level metadata, age rating, and localized app name/subtitle.",
      ["list_apps", "get_app", "update_app", "list_app_infos", "update_app_info",
       "set_age_rating", "create_app_info_localization", "update_app_info_localization"]),
@@ -137,7 +137,7 @@ def render(tools):
                "schemas by `scripts/gen_tools_doc.py` — regenerate after changing tools.\n")
     out.append("> Required parameters are marked **yes**. IDs are opaque strings returned by the "
                "`list_*`/`get_*` tools — resolve them first. Anything not covered here is reachable "
-               "via the generic `appstore_request` / `appstore_list` tools.\n")
+               "via the generic `api_execute` / `api_list` tools.\n")
     out.append("> Each tool's badge reflects the MCP annotations it advertises, which clients use "
                "to decide what needs confirming. Set `ASC_READ_ONLY=1` to serve only the read-only "
                "tools, or `ASC_TOOLS=<groups>` to serve only some of the sections below.\n")

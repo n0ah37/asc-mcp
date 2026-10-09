@@ -137,7 +137,9 @@ pub struct UploadLibraryImageArgs {
     pub asset_library_id: String,
     /// Local path to the image file (PNG/JPEG).
     pub file_path: String,
-    /// "APP_SCREENSHOTS_AND_PREVIEWS" (default) or "CREATIVE_ASSETS".
+    /// "APP_SCREENSHOTS_AND_PREVIEWS" (default) or "CREATIVE_ASSETS". Use
+    /// CREATIVE_ASSETS for product page headers, search result assets and
+    /// in-app event artwork.
     #[serde(default)]
     pub category: Option<String>,
     /// An internal name to find the asset by later.
@@ -151,7 +153,9 @@ pub struct UploadLibraryVideoArgs {
     pub asset_library_id: String,
     /// Local path to the video file.
     pub file_path: String,
-    /// "APP_SCREENSHOTS_AND_PREVIEWS" (default) or "CREATIVE_ASSETS".
+    /// "APP_SCREENSHOTS_AND_PREVIEWS" (default) or "CREATIVE_ASSETS". Use
+    /// CREATIVE_ASSETS for product page headers, search result assets and
+    /// in-app event artwork.
     #[serde(default)]
     pub category: Option<String>,
     /// An internal name to find the asset by later.
@@ -180,8 +184,11 @@ pub struct CreatePlacementArgs {
     pub target_type: String,
     /// The ID of the target localization.
     pub target_id: String,
-    /// e.g. "APP_SCREENSHOT", "APP_PREVIEW", "IMESSAGE_APP_SCREENSHOT",
-    /// "EVENT_CARD_ASSET", "EVENT_DETAILS_PAGE_ASSET".
+    /// "APP_SCREENSHOT", "APP_PREVIEW", "IMESSAGE_APP_SCREENSHOT", or a
+    /// creative asset: "PRODUCT_PAGE_HEADER_ASSET" (the product page header),
+    /// "APP_STORE_SEARCH_RESULTS_ASSET" (the search result card),
+    /// "EVENT_CARD_ASSET", "EVENT_DETAILS_PAGE_ASSET", "SEARCH_RESULTS_ADS_ASSET",
+    /// "TODAY_TAB_ADS_ASSET", "RETENTION_MESSAGE_ASSET".
     pub placement_type: String,
     /// The device profile group, e.g. "IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE"; valid
     /// values are the placementProfileGroups in list_asset_library_ref_data.
@@ -280,7 +287,9 @@ state, or reference name, and optionally with their placements."
     /// Upload an image to an asset library.
     #[tool(
         description = "Upload an image to an App Asset Library (reserve → upload → commit). Then \
-place it on a localization with create_asset_library_placement."
+place it on a localization with create_asset_library_placement. For a product page header or \
+search result asset, upload with category CREATIVE_ASSETS and place it with placement type \
+PRODUCT_PAGE_HEADER_ASSET or APP_STORE_SEARCH_RESULTS_ASSET."
     )]
     async fn upload_asset_library_image(
         &self,

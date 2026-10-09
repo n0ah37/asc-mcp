@@ -115,7 +115,7 @@ fn exactly_the_expected_tools_are_marked_destructive() {
     assert_eq!(
         destructive,
         vec![
-            "appstore_request", // can reach every DELETE endpoint Apple has
+            "api_execute", // can reach every DELETE endpoint Apple has
             "delete_asset_library_image",
             "delete_asset_library_placement",
             "delete_asset_library_video",
@@ -147,7 +147,7 @@ fn asc_tools_serves_only_the_groups_asked_for() {
         "an unrequested group leaked in: {served:?}"
     );
     assert!(
-        !served.contains(&"appstore_request".to_string()),
+        !served.contains(&"api_execute".to_string()),
         "the escape hatch is a group like any other"
     );
     assert!(served.len() < full_server().tools().len());
@@ -163,7 +163,7 @@ fn the_core_preset_covers_shipping_an_app() {
     let served = names(&core.tools());
 
     for expected in [
-        "appstore_request",
+        "api_execute",
         "list_apps",
         "create_app_store_version",
         "upload_app_screenshot",
@@ -224,7 +224,7 @@ fn read_only_mode_withholds_every_tool_that_could_write() {
     }
     // Reads and the (GET-restricted) escape hatch remain.
     assert!(served.contains(&"list_apps".to_string()));
-    assert!(served.contains(&"appstore_request".to_string()));
+    assert!(served.contains(&"api_execute".to_string()));
     assert!(served.contains(&"download_analytics_segment".to_string()));
 }
 

@@ -30,14 +30,14 @@ The App Store Connect API has hundreds of endpoints but is uniformly
   App Review submission, TestFlight, provisioning, asset uploads, promoted
   purchases, customer reviews, phased release, users, in-app events, Xcode Cloud,
   analytics reports, and custom product pages.
-- **Two generic escape-hatch tools** — `appstore_request` and `appstore_list` —
+- **Two generic escape-hatch tools** — `api_execute` and `api_list` —
   that can call *any* endpoint with raw JSON:API documents.
 
 ## Tools
 
 | Group | Tools |
 |------|-------|
-| **Generic** | `appstore_request`, `appstore_list` |
+| **Generic** | `api_execute`, `api_list` |
 | **Apps & metadata** | `list_apps`, `get_app`, `update_app`, `list_app_infos`, `update_app_info`, `set_age_rating`, `create_app_info_localization`, `update_app_info_localization` |
 | **In-app purchases (v2)** | `list_in_app_purchases`, `create_in_app_purchase`, `update_in_app_purchase`, `delete_in_app_purchase`, `create_iap_localization`, `set_iap_price_schedule`, `upload_iap_review_screenshot` |
 | **Subscriptions** | `list_subscription_groups`, `create_subscription_group`, `create_subscription`, `update_subscription`, `create_subscription_localization`, `set_subscription_price` |
@@ -171,14 +171,14 @@ Groups: `generic`, `apps`, `iap`, `subscriptions`, `versions`, `pricing`,
 is warned about on stderr and serves nothing rather than quietly falling back to
 everything.
 
-In read-only mode `appstore_request` is kept but refuses any method other than
+In read-only mode `api_execute` is kept but refuses any method other than
 `GET`, so the escape hatch still reaches endpoints without a curated tool without
 becoming a way around the restriction.
 
 Every served tool advertises MCP annotations (`readOnlyHint`, `destructiveHint`,
 `idempotentHint`), which clients use to decide what needs confirming. Nine tools
 are marked destructive: the seven `delete_*`/`remove_*` tools, `expire_build`,
-`disable_bundle_id_capability`, and `appstore_request` (which can reach any
+`disable_bundle_id_capability`, and `api_execute` (which can reach any
 `DELETE` endpoint).
 
 **Discovery mode.** Search by task, inspect a matching tool's full input schema
@@ -271,7 +271,7 @@ npx @modelcontextprotocol/inspector ./target/release/appstore-mcp
   is retried on its own. Screenshots/previews require an existing
   `appScreenshotSet` / `appPreviewSet`; create those with the generic tools if
   needed.
-- **Pagination.** `appstore_list` returns one page by default. Pass
+- **Pagination.** `api_list` returns one page by default. Pass
   `max_pages` (up to 20) to follow `links.next` and merge the pages into one
   result — `meta.hasMore` tells you whether anything is left.
 - **Analytics data.** `request_analytics_report` → `list_analytics_reports` →
@@ -279,9 +279,9 @@ npx @modelcontextprotocol/inspector ./target/release/appstore-mcp
   presigned segment URL; `download_analytics_segment` fetches it, gunzips it, and
   returns the rows as JSON. Apple can take up to 48 hours to generate the first
   report for a new request.
-- **Anything not listed** is reachable via `appstore_request` (raw method + path +
-  JSON:API body) or `appstore_list` (paginated GET). Example:
-  `appstore_request { "method": "GET", "path": "/v1/apps/123/customerReviews" }`.
+- **Anything not listed** is reachable via `api_execute` (raw method + path +
+  JSON:API body) or `api_list` (paginated GET). Example:
+  `api_execute { "method": "GET", "path": "/v1/apps/123/customerReviews" }`.
 - **Not covered:** sales/finance report endpoints return gzipped TSV (not JSON:API)
   and are out of scope for these tools.
 

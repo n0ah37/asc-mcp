@@ -261,7 +261,7 @@ impl AppStoreServer {
         description = "Set the TestFlight 'What's New' test notes for a build in a specific locale \
 (creates a betaBuildLocalization). locale is required (e.g. \"en-US\"); whats_new is the \
 tester-facing 'What to Test' text shown in the TestFlight app. \
-To update an existing localization instead of creating one, use appstore_request with \
+To update an existing localization instead of creating one, use api_execute with \
 PATCH /v1/betaBuildLocalizations/{id}."
     )]
     async fn set_build_test_notes(

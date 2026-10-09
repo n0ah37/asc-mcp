@@ -9,9 +9,10 @@ use rmcp::{
     ErrorData as McpError,
 };
 use serde::Deserialize;
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 use super::{de_coerce_json_opt, de_coerce_map_opt, flatten_query, AppStoreServer};
+use crate::spec;
 use crate::error::AscError;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -29,6 +30,32 @@ pub struct RequestArgs {
     /// e.g. {"data": {"type": "apps", "id": "123", "attributes": {...}}}.
     #[serde(default, deserialize_with = "de_coerce_json_opt")]
     pub body: Option<Value>,
+    /// Check the request against Apple's OpenAPI spec before sending (default
+    /// true). Set false only when Apple has added something newer than the
+    /// embedded spec.
+    #[serde(default)]
+    pub validate: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ApiSearchArgs {
+    /// Words describing the operation, e.g. "webhook deliveries",
+    /// "create custom product page", "sales report", "game center leaderboard".
+    pub query: String,
+    /// Restrict to one HTTP method (GET, POST, PATCH, PUT, DELETE).
+    #[serde(default)]
+    pub method: Option<String>,
+    /// Maximum results (default 15, maximum 50).
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ApiDescribeArgs {
+    /// HTTP method of the operation.
+    pub method: String,
+    /// Path from api_search, templated ("/v1/apps/{id}") or concrete ("/v1/apps/123").
+    pub path: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -82,15 +109,94 @@ fn parse_method(raw: &str) -> Result<Method, AscError> {
         })
 }
 
+fn find_operation(method: &str, path: &str) -> Result<&'static spec::Operation, AscError> {
+    spec::find(method, path).ok_or_else(|| {
+        let methods = spec::methods_for(path);
+        let hint = if methods.is_empty() {
+            "no operation has this path; find the right one with api_search".to_string()
+        } else {
+            format!("this path accepts {}", methods.join(", "))
+        };
+        AscError::InvalidRequest(format!(
+            "{} {path} is not in the App Store Connect API {}: {hint}",
+            method.to_ascii_uppercase(),
+            spec::spec().version
+        ))
+    })
+}
+
+/// Check a request against the embedded spec, joining every problem into one
+/// error so the agent can fix them all in one retry.
+fn check_request(
+    method: &str,
+    path: &str,
+    query: &[(String, String)],
+    body: Option<&Value>,
+) -> Result<(), AscError> {
+    let op = find_operation(method, path)?;
+    let mut problems = spec::check_query(op, query);
+    if method != "GET" {
+        problems.extend(spec::check_body(op, body));
+    }
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(AscError::InvalidRequest(format!(
+            "{method} {} does not match Apple's spec ({}). Pass validate=false to send it anyway.\n- {}",
+            op.path,
+            op.id,
+            problems.join("\n- ")
+        )))
+    }
+}
+
 #[tool_router(router = generic_router, vis = "pub(crate)")]
 impl AppStoreServer {
-    /// Make a raw, authenticated request to any App Store Connect endpoint.
+    /// Search Apple's full API by words.
     #[tool(
-        description = "Make a raw authenticated request to ANY App Store Connect API endpoint \
-(method + path + optional query + optional JSON:API body). Use this for operations without a \
-dedicated tool. Returns the parsed JSON response."
+        description = "Search every App Store Connect API operation (all of Apple's OpenAPI spec, \
+including Game Center, App Clips, webhooks, sales and finance reports, background assets, \
+alternative distribution and anything without a dedicated tool) by words. Returns method, path \
+and operationId. Follow with api_describe for parameters and body shape, then api_execute."
     )]
-    async fn appstore_request(
+    async fn api_search(
+        &self,
+        Parameters(args): Parameters<ApiSearchArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        let limit = args.limit.unwrap_or(15).clamp(1, 50);
+        let hits: Vec<Value> = spec::search(&args.query, args.method.as_deref(), limit)
+            .into_iter()
+            .map(spec::summarize)
+            .collect();
+        self.ok_json(json!({
+            "apiVersion": spec::spec().version,
+            "results": hits,
+        }))
+    }
+
+    /// Describe one operation from the spec.
+    #[tool(
+        description = "Describe one App Store Connect API operation: its accepted query parameters \
+(filters, fields, include, sort, limit, with allowed values and which are required) and its \
+request body schema with references expanded. Use the path from api_search."
+    )]
+    async fn api_describe(
+        &self,
+        Parameters(args): Parameters<ApiDescribeArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        let op = find_operation(&args.method, &args.path).map_err(AppStoreServer::map_err)?;
+        self.ok_json(spec::describe(op))
+    }
+
+    /// Execute any App Store Connect operation, checked against the spec.
+    #[tool(
+        description = "Call ANY App Store Connect API operation (method + path + optional query + \
+optional JSON:API body) and return the parsed JSON response. The request is first checked \
+against Apple's OpenAPI spec: an unknown path, an unaccepted or missing query parameter, or a \
+body attribute Apple does not define comes back as a clear error before anything is sent. Find \
+operations with api_search and their shape with api_describe."
+    )]
+    async fn api_execute(
         &self,
         Parameters(args): Parameters<RequestArgs>,
     ) -> Result<CallToolResult, McpError> {
@@ -103,6 +209,10 @@ dedicated tool. Returns the parsed JSON response."
         }
 
         let query = args.query.as_ref().map(flatten_query).unwrap_or_default();
+        if args.validate.unwrap_or(true) {
+            check_request(method.as_str(), &args.path, &query, args.body.as_ref())
+                .map_err(AppStoreServer::map_err)?;
+        }
         let value = self
             .client
             .request(method, &args.path, &query, args.body)
@@ -117,7 +227,7 @@ dedicated tool. Returns the parsed JSON response."
 and pagination. Returns one page by default; set `max_pages` to follow `links.next` and merge \
 several pages into one result, or pass a previous response's links.next back as `cursor` to resume."
     )]
-    async fn appstore_list(
+    async fn api_list(
         &self,
         Parameters(args): Parameters<ListArgs>,
     ) -> Result<CallToolResult, McpError> {
@@ -140,6 +250,7 @@ several pages into one result, or pass a previous response's links.next back as 
                 if let Some(limit) = args.limit {
                     query.push(("limit".into(), limit.to_string()));
                 }
+                check_request("GET", &args.path, &query, None).map_err(AppStoreServer::map_err)?;
                 (args.path.clone(), query)
             }
         };
@@ -168,6 +279,7 @@ mod tests {
             path: path.into(),
             query: None,
             body: None,
+            validate: None,
         }
     }
 
@@ -204,7 +316,7 @@ mod tests {
             .await;
 
         let err = test_server(&mock.uri())
-            .appstore_request(Parameters(request_args("FETCH", "/v1/apps")))
+            .api_execute(Parameters(request_args("FETCH", "/v1/apps")))
             .await
             .unwrap_err();
         assert!(
@@ -217,7 +329,7 @@ mod tests {
     #[tokio::test]
     async fn read_only_mode_refuses_writes_through_the_escape_hatch() {
         // Without this guard, read-only mode would be trivially bypassable:
-        // `appstore_request` can reach every write endpoint Apple has.
+        // `api_execute` can reach every write endpoint Apple has.
         let mock = MockServer::start().await;
         Mock::given(http_method("POST"))
             .respond_with(ResponseTemplate::new(201))
@@ -234,7 +346,7 @@ mod tests {
 
         for verb in ["POST", "PATCH", "PUT", "DELETE"] {
             let err = server
-                .appstore_request(Parameters(request_args(verb, "/v1/apps")))
+                .api_execute(Parameters(request_args(verb, "/v1/apps")))
                 .await
                 .unwrap_err();
             assert!(err.message.contains("read-only"), "{verb}: {}", err.message);
@@ -256,7 +368,7 @@ mod tests {
             discovery: false,
         });
         let result = AppStoreServer::new(config)
-            .appstore_request(Parameters(request_args("get", "/v1/apps")))
+            .api_execute(Parameters(request_args("get", "/v1/apps")))
             .await
             .unwrap();
         assert!(result_text(&result).contains("\"data\""));
@@ -276,7 +388,7 @@ mod tests {
             .await;
 
         let result = test_server(&mock.uri())
-            .appstore_list(Parameters(list_args("/v1/apps", None)))
+            .api_list(Parameters(list_args("/v1/apps", None)))
             .await
             .unwrap();
         let doc: Value = serde_json::from_str(&result_text(&result)).unwrap();
@@ -308,7 +420,7 @@ mod tests {
             .await;
 
         let result = test_server(&mock.uri())
-            .appstore_list(Parameters(list_args("/v1/apps", Some(3))))
+            .api_list(Parameters(list_args("/v1/apps", Some(3))))
             .await
             .unwrap();
         let doc: Value = serde_json::from_str(&result_text(&result)).unwrap();
@@ -331,7 +443,7 @@ mod tests {
         let mut args = list_args("ignored", None);
         args.cursor = Some(format!("{}/v1/apps?cursor=RESUME", mock.uri()));
         test_server(&mock.uri())
-            .appstore_list(Parameters(args))
+            .api_list(Parameters(args))
             .await
             .unwrap();
     }
